@@ -1,0 +1,77 @@
+{
+  "namespace": "hr.kapsch.mgw.charging.avro",
+  "type": "record",
+  "name": "ChargingContext",
+  "fields": [
+    {
+      "name": "reservationId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "partnerId",
+      "type": [
+        "null",
+        "long"
+      ]
+    },
+    {
+      "name": "chargingVasPortId",
+      "type": [
+        "null",
+        "long"
+      ]
+    },
+    {
+      "name": "routeId",
+      "type": [
+        "null",
+        "long"
+      ]
+    },
+    {
+      "name": "ratingId",
+      "type": [
+        "null",
+        "long"
+      ]
+    },
+    {
+      "name": "centerId",
+      "type": [
+        "null",
+        "long"
+      ]
+    },
+    {
+      "name": "success",
+      "type": "boolean"
+    },
+    {
+      "name": "info",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "terminateOnDeliveryReport",
+      "type": [
+        "null",
+        "boolean"
+      ]
+    },
+    {
+      "name": "terminalTime",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.time.Instant"
+        }
+      ]
+    }
+  ]
+}

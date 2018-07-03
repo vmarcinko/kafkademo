@@ -1,0 +1,169 @@
+{
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "type": "record",
+  "name": "Message",
+  "fields": [
+    {
+      "name": "mgwId",
+      "type": "string"
+    },
+    {
+      "name": "vasReferenceId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "multiDestination",
+      "type": "boolean"
+    },
+    {
+      "name": "src",
+      "type": "string"
+    },
+    {
+      "name": "dest",
+      "type": "string"
+    },
+    {
+      "name": "direction",
+      "type": "hr.kapsch.mgw.domain.Direction"
+    },
+    {
+      "name": "received",
+      "type": "long",
+      "java-class": "java.time.Instant"
+    },
+    {
+      "name": "scheduled",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.time.Instant"
+        }
+      ]
+    },
+    {
+      "name": "expiry",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.time.Instant"
+        }
+      ]
+    },
+    {
+      "name": "autoReply",
+      "type": "boolean"
+    },
+    {
+      "name": "contentTypeIn",
+      "type": "hr.kapsch.mgw.messaging.message.avro.MessageContentType"
+    },
+    {
+      "name": "subject",
+      "type": [
+        "null",
+        {
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "text",
+      "type": [
+        "null",
+        {
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "textAsString",
+      "type": [
+        "null",
+        {
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "dataCoding",
+      "type": [
+        "null",
+        {
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "textEncoding",
+      "type": [
+        "null",
+        {
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "dataEsm",
+      "type": [
+        "null",
+        {
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "drRequested",
+      "type": [
+        "null",
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "attachments",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "BinAttachement",
+            "fields": [
+              {
+                "name": "data",
+                "type": "bytes"
+              },
+              {
+                "name": "headers",
+                "type": [
+                  "null",
+                  {
+                    "type": "map",
+                    "values": "string"
+                  }
+                ]
+              },
+              {
+                "name": "tlvs",
+                "type": [
+                  "null",
+                  {
+                    "type": "map",
+                    "values": "bytes"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "MessageData",
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "fields": [
+    {
+      "name": "message",
+      "type": "hr.kapsch.mgw.messaging.message.avro.Message"
+    },
+    {
+      "name": "context",
+      "type": "hr.kapsch.mgw.messaging.message.avro.MessagingContext"
+    }
+  ]
+}

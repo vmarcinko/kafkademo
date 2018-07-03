@@ -1,0 +1,14 @@
+{
+  "namespace": "hr.kapsch.mgw.charging",
+  "type": "enum",
+  "name": "ChargingRequestType",
+  "symbols": [
+    "RESERVE",
+    "RESERVE_ADDITIONAL",
+    "CHARGE",
+    "RELEASE",
+    "CHARGE_AMOUNT",
+    "REGISTER",
+    "UNREGISTER"
+  ]
+}

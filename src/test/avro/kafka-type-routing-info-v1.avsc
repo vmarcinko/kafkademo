@@ -1,0 +1,61 @@
+{
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "type": "record",
+  "name": "RoutingInfo",
+  "fields": [
+        {
+          "name": "direction",
+          "type": "hr.kapsch.mgw.domain.Direction"
+        },
+        {
+          "name": "messagingVasPortId",
+          "type": [
+            "null",
+            {
+              "type": "long",
+              "java-class": "java.lang.Long"
+            }
+          ]
+        },
+        {
+          "name": "routeId",
+          "type": [
+            "null",
+            {
+              "type": "long",
+              "java-class": "java.lang.Long"
+            }
+          ]
+        },
+        {
+          "name": "centerId",
+          "type": [
+            "null",
+            {
+              "type": "long",
+              "java-class": "java.lang.Long"
+            }
+          ]
+        },
+        {
+          "name": "centerPortId",
+          "type": [
+            "null",
+            {
+              "type": "long",
+              "java-class": "java.lang.Long"
+            }
+          ]
+        },
+        {
+          "name": "autoReplyMessagingVasPortId",
+          "type": [
+            "null",
+            {
+              "type": "long",
+              "java-class": "java.lang.Long"
+            }
+          ]
+        }
+    ]
+}

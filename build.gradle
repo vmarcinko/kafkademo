@@ -1,0 +1,72 @@
+buildscript {
+	ext {
+		springBootVersion = '2.0.3.RELEASE'
+	}
+	repositories {
+		mavenCentral()
+		jcenter()
+	}
+	dependencies {
+		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+		classpath "com.commercehub.gradle.plugin:gradle-avro-plugin:0.14.2"
+	}
+}
+
+
+apply plugin: 'java'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+apply plugin: 'com.commercehub.gradle.plugin.avro'
+
+group = 'me.marcinko'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = 1.8
+
+ext {
+	confluentVersion = '4.1.0'
+	avroVersion = '1.8.2'
+	kafkaVersion = '1.1.0'
+	kafkaScalaVersion = '2.11'
+	jerseyVersion = '2.27'
+}
+
+repositories {
+	maven { url "https://packages.confluent.io/maven" }
+	mavenCentral()
+}
+
+dependencies {
+	compile('org.springframework.boot:spring-boot-starter')
+	compile("io.confluent:kafka-streams-avro-serde:${confluentVersion}")
+	compile("io.confluent:kafka-avro-serializer:${confluentVersion}")
+	compile("io.confluent:kafka-schema-registry-client:${confluentVersion}")
+	compile("org.apache.avro:avro:${avroVersion}")
+	compile("org.apache.kafka:kafka-clients:${kafkaVersion}")
+	compile("org.apache.kafka:kafka-streams:${kafkaVersion}")
+	compile("org.glassfish.jersey.inject:jersey-hk2:${jerseyVersion}")
+//	compile('org.springframework.kafka:spring-kafka')
+
+	testCompile('org.springframework.boot:spring-boot-starter-test')
+	testCompile("org.apache.kafka:kafka_${kafkaScalaVersion}:${kafkaVersion}")
+	testCompile("org.apache.kafka:kafka_${kafkaScalaVersion}:${kafkaVersion}:test")
+	testCompile("io.confluent:kafka-schema-registry:${confluentVersion}")
+	testCompile("io.confluent:kafka-schema-registry:${confluentVersion}:tests")
+	testCompile("org.apache.curator:curator-test:2.9.0")
+	testCompile("org.apache.kafka:kafka-clients:${kafkaVersion}:test")
+
+	compile "org.glassfish.jersey.bundles.repackaged:jersey-guava:2.8"
+
+//	compile "io.confluent:rest-utils:${confluentVersion}"
+//	testCompile "io.confluent:rest-utils-test:${confluentVersion}"
+//	compile "org.glassfish.jersey.test-framework:jersey-test-framework-core:${jerseyVersion}"
+//	compile("org.glassfish.jersey.media:jersey-media-json-jackson:${jerseyVersion}")
+}
+
+configurations {
+    all*.exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+}
+
+avro {
+    createSetters = false
+	fieldVisibility = "PRIVATE"
+}

@@ -1,0 +1,15 @@
+{
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "name": "MessageContentType",
+  "type": "enum",
+  "symbols": [
+    "UNKNOWN",
+    "TEXT",
+    "BIN",
+    "WAPPUSH",
+    "SMPP",
+    "MMS",
+    "OTAOMASETTINGS",
+    "USSD"
+  ]
+}

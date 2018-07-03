@@ -1,0 +1,16 @@
+{
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "type": "enum",
+  "name": "DeliveryReceiptStatus",
+  "symbols": [
+    "UNKNOWN",
+    "EXPIRED",
+    "DELIVERED",
+    "REJECTED",
+    "INDETERMINATE",
+    "DELETED",
+    "UNDELIVERABLE",
+    "ACCEPTED",
+    "FORWARDED"
+  ]
+}

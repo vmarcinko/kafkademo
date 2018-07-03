@@ -1,0 +1,23 @@
+{
+  "type": "enum",
+  "name": "MessageDeliveryStatus",
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "symbols": [
+    "RECEIVED",
+    "ROUTE_PROCESSING",
+    "CENTER_PROCESSING",
+    "SUCCESS",
+    "TRANSCODED",
+    "RETRY",
+    "TRANSCODING_NOT_USED",
+    "AUTO_REPLIED",
+    "UNKNOWN",
+    "FAILED_IN_ROUTE",
+    "FAILED_IN_CENTER",
+    "FAILED",
+    "TIMEOUT",
+    "BLACKLISTED",
+    "CHARGING_FAILURE",
+    "SHORTCODE_NOT_ALLOWED"
+  ]
+}

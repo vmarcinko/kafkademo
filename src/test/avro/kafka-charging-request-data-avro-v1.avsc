@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "ChargingRequestData",
+  "namespace": "hr.kapsch.mgw.charging.avro",
+  "fields": [
+    {
+      "name": "request",
+      "type": "hr.kapsch.mgw.charging.avro.ChargingRequest"
+    },
+    {
+      "name": "context",
+      "type": "hr.kapsch.mgw.charging.avro.ChargingContext"
+    }
+  ]
+}

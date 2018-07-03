@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "DeliveryReceiptData",
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "fields": [
+    {
+      "name": "message",
+      "type": "hr.kapsch.mgw.messaging.message.avro.DeliveryReceipt"
+    },
+    {
+      "name": "context",
+      "type": "hr.kapsch.mgw.messaging.message.avro.MessagingContext"
+    }
+  ]
+}

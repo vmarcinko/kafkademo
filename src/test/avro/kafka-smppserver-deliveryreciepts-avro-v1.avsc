@@ -1,0 +1,264 @@
+{
+  "type": "record",
+  "name": "SmppServerDeliveryReceipts",
+  "namespace": "hr.kapsch.mgw.messaging.avro.receipt",
+  "fields": [
+    {
+      "name": "smppIds",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": "string"
+        }
+      ]
+    },
+    {
+        "name": "deliveryReceipt",
+        "type": [
+            "null",
+            {
+              "type": "record",
+              "name": "DeliveryReceipt",
+              "fields": [
+                {
+                  "name": "centerReferenceId",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "mgwId",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "vasReferenceId",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "multiDestination",
+                  "type": "boolean"
+                },
+                {
+                  "name": "src",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "dest",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "deliveryStatus",
+                  "type": [
+                    "null",
+                    {
+                      "namespace": "hr.kapsch.mgw.messaging.message.avro",
+                      "type": "enum",
+                      "name": "DeliveryReceiptStatus",
+                      "symbols": [
+                        "UNKNOWN",
+                        "EXPIRED",
+                        "DELIVERED",
+                        "REJECTED",
+                        "INDETERMINATE",
+                        "DELETED",
+                        "UNDELIVERABLE",
+                        "ACCEPTED",
+                        "FORWARDED"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "errorCode",
+                  "type": [
+                    "null",
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "name": "received",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long",
+                      "java-class": "java.time.Instant"
+                    }
+                  ]
+                },
+                {
+                  "name": "submitDate",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long",
+                      "java-class": "java.time.Instant"
+                    }
+                  ]
+                },
+                {
+                  "name": "doneDate",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long",
+                      "java-class": "java.time.Instant"
+                    }
+                  ]
+                },
+                {
+                  "name": "submitText",
+                  "type": [
+                    "null",
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "name": "submitCount",
+                  "type": [
+                    "null",
+                    {
+                      "type": "int"
+                    }
+                  ]
+                },
+                {
+                  "name": "deliveredCount",
+                  "type": [
+                    "null",
+                    {
+                      "type": "int"
+                    }
+                  ]
+                },
+                {
+                  "name": "originalRouteId",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long"
+                    }
+                  ]
+                }
+              ]
+            }
+        ]
+    },
+    {
+        "name": "messagingContext",
+        "type": [
+            "null",
+            {
+              "type": "record",
+              "name": "MessagingContext",
+              "fields": [
+                {
+                  "name": "centerId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "centerPortId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "messagingVasPortId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "routeId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "reservationIds",
+                  "type": [
+                    "null",
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "type": "string"
+                        }
+                    }
+                  ]
+                },
+                {
+                  "name": "chargingCenterId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "ratingId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "terminateOnDeliveryReport",
+                  "type": "boolean"
+                },
+                {
+                  "name": "forceDestinationNpi",
+                  "type": [
+                    "null",
+                    "int"
+                  ]
+                },
+                {
+                  "name": "forceDestinationTon",
+                  "type": [
+                    "null",
+                    "int"
+                  ]
+                },
+                {
+                  "name": "forceSourceNpi",
+                  "type": [
+                    "null",
+                    "int"
+                  ]
+                },
+                {
+                  "name": "forceSourceTon",
+                  "type": [
+                    "null",
+                    "int"
+                  ]
+                }
+              ]
+            }
+        ]
+    }
+  ]
+}

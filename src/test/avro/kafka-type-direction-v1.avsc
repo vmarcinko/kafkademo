@@ -1,0 +1,9 @@
+{
+  "namespace": "hr.kapsch.mgw.domain",
+  "name": "Direction",
+  "type": "enum",
+  "symbols": [
+    "SEND",
+    "NOTIFY"
+  ]
+}

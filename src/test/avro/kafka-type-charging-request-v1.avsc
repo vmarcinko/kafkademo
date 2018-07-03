@@ -1,0 +1,191 @@
+{
+  "namespace": "hr.kapsch.mgw.charging.avro",
+  "type": "record",
+  "name": "ChargingRequest",
+  "fields": [
+    {
+      "name": "mgwId",
+      "type": "string"
+    },
+    {
+      "name": "reservationId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "received",
+      "type": "long",
+      "java-class": "java.time.Instant"
+    },
+    {
+      "name": "type",
+      "type": "hr.kapsch.mgw.charging.ChargingRequestType"
+    },
+    {
+      "name": "endUserAddress",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "amount",
+      "type": [
+        "null",
+        "double"
+      ]
+    },
+    {
+      "name": "billingText",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "referenceCode",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "explicitCharging",
+      "type": [
+        "null",
+        "boolean"
+      ]
+    },
+    {
+      "name": "messageSize",
+      "type": [
+        "null",
+        "long"
+      ]
+    },
+    {
+      "name": "chargingParty",
+      "type": [
+            "null",
+            {
+              "type": "enum",
+              "name": "ChargingParty",
+              "symbols": [
+                "NONE",
+                "END_USER",
+                "APPLICATION",
+                "MO_PREMIUM"
+              ]
+            }
+        ]
+    },
+    {
+      "name": "direction",
+      "type": [
+        "null",
+        {
+         "namespace": "hr.kapsch.mgw.domain",
+         "name": "Direction",
+         "type": "enum",
+         "symbols": [
+           "SEND",
+           "NOTIFY"
+         ]
+       }
+      ]
+    },
+    {
+      "name": "billingCode",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "sourceMsisdn",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "partnerLabel",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "sender",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "serviceId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "bssCode",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "serviceDescription",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "bookingId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "contractId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "duration",
+      "type": [
+        "null",
+        "long"
+      ]
+    },
+    {
+      "name": "username",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "password",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "tax",
+      "type": [
+        "null",
+        "int"
+      ]
+    }
+  ]
+}

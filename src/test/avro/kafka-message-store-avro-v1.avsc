@@ -1,0 +1,55 @@
+{
+  "type": "record",
+  "name": "StoreMessage",
+  "namespace": "hr.kapsch.mgw.messaging.store.avro",
+  "fields": [
+    {
+      "name": "mgwId",
+      "type": "string"
+    },
+    {
+      "name": "vasReferenceId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "src",
+      "type": "string"
+    },
+    {
+      "name": "dest",
+      "type": "string"
+    },
+    {
+      "name": "topic",
+      "type": "string"
+    },
+    {
+      "name": "ttime",
+      "type": "long",
+      "java-class": "java.time.Instant"
+    },
+    {
+      "name": "partition",
+      "type": "int"
+    },
+    {
+      "name": "koffset",
+      "type": "long"
+    },
+    {
+      "name": "direction",
+      "type": "hr.kapsch.mgw.domain.Direction"
+    },
+    {
+      "name": "messageStatus",
+      "type": "hr.kapsch.mgw.messaging.message.avro.MessageDeliveryStatus"
+    },
+    {
+      "name": "deliveryStatus",
+      "type": "hr.kapsch.mgw.messaging.message.avro.DeliveryReceiptStatus"
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "type": "record",
+  "name": "DeliveryReceipt",
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "fields": [
+    {
+      "name": "centerReferenceId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "mgwId",
+      "type": "string"
+    },
+    {
+      "name": "vasReferenceId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "multiDestination",
+      "type": "boolean"
+    },
+    {
+      "name": "src",
+      "type": "string"
+    },
+    {
+      "name": "dest",
+      "type": "string"
+    },
+    {
+      "name": "deliveryStatus",
+      "type": "hr.kapsch.mgw.messaging.message.avro.DeliveryReceiptStatus"
+    },
+    {
+      "name": "errorCode",
+      "type": [
+        "null",
+        {
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "received",
+      "type": "long",
+      "java-class": "java.time.Instant"
+    },
+    {
+      "name": "submitDate",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.time.Instant"
+        }
+      ]
+    },
+    {
+      "name": "doneDate",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.time.Instant"
+        }
+      ]
+    },
+    {
+      "name": "submitText",
+      "type": [
+        "null",
+        {
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "submitCount",
+      "type": [
+        "null",
+        {
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "deliveredCount",
+      "type": [
+        "null",
+        {
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "originalRouteId",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.lang.Long"
+        }
+      ]
+    },
+    {
+      "name": "aggregated",
+      "type": [
+        "null",
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "aggregatedStatus",
+      "type": "hr.kapsch.mgw.messaging.message.avro.DeliveryReceiptStatus"
+    }
+  ]
+}

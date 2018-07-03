@@ -1,0 +1,251 @@
+{
+  "type": "record",
+  "name": "MultiDestinations",
+  "namespace": "hr.kapsch.mgw.messaging.multidest.avro",
+  "fields": [
+    {
+        "name": "originalMessage",
+        "type": [
+            "null",
+            {
+              "type": "record",
+              "name": "MessageReference",
+              "fields": [
+                {
+                  "name": "partnerId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "originalRouteId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                  "name": "mgwId",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "vasReferenceId",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "multiDestination",
+                  "type": "boolean"
+                },
+                {
+                  "name": "reservationIds",
+                  "type": [
+                    "null",
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "type": "string"
+                        }
+                    }
+                  ]
+                },
+                 {
+                   "name": "centerId",
+                   "type": [
+                     "null",
+                     {
+                       "type": "long",
+                       "java-class": "java.lang.Long"
+                     }
+                   ]
+                 },
+                {
+                  "name": "chargingCenterId",
+                  "type": [
+                    "null",
+                    "long"
+                  ]
+                },
+                {
+                    "name": "ratingId",
+                    "type": [
+                        "null",
+                        "long"
+                    ]
+                },
+                {
+                  "name": "source",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "concatenationCount",
+                  "type": [
+                    "null",
+                    "int"
+                  ]
+                },
+                 {
+                   "name": "destinationCount",
+                   "type": [
+                     "null",
+                     "int"
+                   ]
+                 }
+              ]
+            }
+        ]
+    },
+    {
+      "name": "destinations",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": "string"
+        }
+      ]
+    },
+    {
+      "name": "terminateOnDeliveryReport",
+      "type": "boolean"
+    },
+    {
+      "name": "parts",
+      "type": [
+        "null",
+        {
+          "type": "map",
+          "values":
+            {
+              "type": "record",
+              "name": "DeliveryReceiptPart",
+              "fields" : [
+
+                {
+                  "name": "centerReferenceId",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "mgwId",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "src",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                {
+                  "name": "deliveryStatus",
+                  "type": "hr.kapsch.mgw.messaging.message.avro.DeliveryReceiptStatus"
+                },
+                {
+                  "name": "errorCode",
+                  "type": [
+                    "null",
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "name": "received",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long",
+                      "java-class": "java.time.Instant"
+                    }
+                  ]
+                },
+                {
+                  "name": "submitDate",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long",
+                      "java-class": "java.time.Instant"
+                    }
+                  ]
+                },
+                {
+                  "name": "doneDate",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long",
+                      "java-class": "java.time.Instant"
+                    }
+                  ]
+                },
+                {
+                  "name": "submitText",
+                  "type": [
+                    "null",
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "name": "submitCount",
+                  "type": [
+                    "null",
+                    {
+                      "type": "int"
+                    }
+                  ]
+                },
+                {
+                  "name": "deliveredCount",
+                  "type": [
+                    "null",
+                    {
+                      "type": "int"
+                    }
+                  ]
+                },
+                {
+                  "name": "originalRouteId",
+                  "type": [
+                    "null",
+                    {
+                      "type": "long",
+                      "java-class": "java.lang.Long"
+                    }
+                  ]
+                },
+                  {
+                    "name": "centerPortId",
+                    "type": [
+                      "null",
+                      {
+                        "type": "long",
+                        "java-class": "java.lang.Long"
+                      }
+                    ]
+                  }
+              ]
+            }
+        }
+      ]
+    }
+  ]
+}

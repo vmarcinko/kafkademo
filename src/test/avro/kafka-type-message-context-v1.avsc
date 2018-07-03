@@ -1,0 +1,254 @@
+{
+  "namespace": "hr.kapsch.mgw.messaging.message.avro",
+  "type": "record",
+  "name": "MessagingContext",
+  "fields": [
+    {
+      "name": "status",
+      "type": "hr.kapsch.mgw.messaging.message.avro.MessageDeliveryStatus"
+    },
+    {
+      "name": "statusDesc",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "asyncProcess",
+      "type": "boolean"
+    },
+    {
+      "name": "partnerId",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.lang.Long"
+        }
+      ]
+    },
+    {
+      "name": "serviceId",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.lang.Long"
+        }
+      ]
+    },
+    {
+      "name": "contentTypeOut",
+      "type": "hr.kapsch.mgw.messaging.message.avro.MessageContentType"
+    },
+    {
+      "name": "routingInfo",
+      "type": "hr.kapsch.mgw.messaging.message.avro.RoutingInfo"
+    },
+    {
+      "name": "forceSrc",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "forceDest",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "forceSrcNpi",
+      "type": {
+        "type": "int",
+        "java-class": "java.lang.Byte"
+      }
+    },
+    {
+      "name": "forceSrcTon",
+      "type": {
+        "type": "int",
+        "java-class": "java.lang.Byte"
+      }
+    },
+    {
+      "name": "forceDestNpi",
+      "type": {
+        "type": "int",
+        "java-class": "java.lang.Byte"
+      }
+    },
+    {
+      "name": "forceDestTon",
+      "type": {
+        "type": "int",
+        "java-class": "java.lang.Byte"
+      }
+    },
+    {
+      "name": "forceDeliveryReceiptRequested",
+      "type": "boolean"
+    },
+    {
+      "name": "incomingCnt",
+      "type": {
+        "type": "int"
+      }
+    },
+    {
+      "name": "outgoingCnt",
+      "type": {
+        "type": "int"
+      }
+    },
+    {
+      "name": "destCnt",
+      "type": {
+        "type": "int"
+      }
+    },
+    {
+      "name": "requestTimeout",
+      "type": {
+        "type": "long",
+        "java-class": "java.lang.Long"
+      }
+    },
+    {
+      "name": "sourceNode",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "terminalNode",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "centerReferenceId",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "bssCode",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "name": "messageValidity",
+      "type": [
+          "null",
+          {
+            "type": "string",
+            "java-class": "java.time.Duration"
+          }
+        ]
+    },
+    {
+      "name": "chargingResult",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "ImplicitChargingResult",
+          "fields": [
+            {
+              "name": "reservationIds",
+              "type": [
+                "null",
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                   }
+                }
+              ]
+            },
+            {
+              "name": "chargingCenterId",
+              "type": [
+                "null",
+                {
+                  "type": "long",
+                  "java-class": "java.lang.Long"
+                }
+              ]
+            },
+            {
+              "name": "ratingId",
+              "type": [
+                "null",
+                {
+                  "type": "long",
+                  "java-class": "java.lang.Long"
+                }
+              ]
+            },
+            {
+              "name": "chargingDirection",
+              "type": "hr.kapsch.mgw.domain.Direction"
+            },
+            {
+              "name": "terminateOnDeliveryReport",
+              "type": [
+                "null",
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "terminalTime",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "java-class": "java.time.Instant"
+        }
+      ]
+    },
+    {
+      "name": "retryCount",
+      "type": [
+        "null",
+        {
+          "type": "int",
+          "java-class": "java.lang.Integer"
+        }
+      ]
+    },
+    {
+      "name": "online",
+      "type": "boolean"
+    },
+    {
+      "name": "onlineTimeout",
+      "type": {
+        "type": "long",
+        "java-class": "java.lang.Long"
+      }
+    },
+    {
+      "name": "messageSize",
+      "type": {
+        "type": "long",
+        "java-class": "java.lang.Long"
+      }
+    }
+  ]
+}
