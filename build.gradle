@@ -28,6 +28,7 @@ ext {
 	kafkaVersion = '1.1.0'
 	kafkaScalaVersion = '2.11'
 	jerseyVersion = '2.27'
+	slf4jVersion = '1.7.25'
 }
 
 repositories {
@@ -55,6 +56,11 @@ dependencies {
 	testCompile("org.apache.kafka:kafka-clients:${kafkaVersion}:test")
 
 	compile "org.glassfish.jersey.bundles.repackaged:jersey-guava:2.8"
+	compile "org.slf4j:slf4j-api:${slf4jVersion}"
+	compile "org.slf4j:log4j-over-slf4j:${slf4jVersion}"
+	compile "org.slf4j:jcl-over-slf4j:${slf4jVersion}"
+	compile "org.slf4j:slf4j-simple:${slf4jVersion}"
+//	compile 'ch.qos.logback:logback-classic:1.2.3'
 
 //	compile "io.confluent:rest-utils:${confluentVersion}"
 //	testCompile "io.confluent:rest-utils-test:${confluentVersion}"
@@ -64,6 +70,8 @@ dependencies {
 
 configurations {
     all*.exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    all*.exclude group: 'log4j', module: 'log4j'
+    all*.exclude group: 'commons-logging', module: 'commons-logging'
 }
 
 avro {

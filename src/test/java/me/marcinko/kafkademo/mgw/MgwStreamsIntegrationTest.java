@@ -1,13 +1,18 @@
-package me.marcinko.kafkademo.custom;
+package me.marcinko.kafkademo.mgw;
 
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 
+import com.google.common.collect.Lists;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
@@ -22,6 +27,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
@@ -41,7 +47,7 @@ import hr.kapsch.mgw.messaging.message.avro.RoutingInfo;
 
 import static org.junit.Assert.assertEquals;
 
-public class MgwIntegrationTest {
+public class MgwStreamsIntegrationTest {
 	@ClassRule
 	public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
 
@@ -74,9 +80,8 @@ public class MgwIntegrationTest {
 		producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
 		producerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
 
-		final MessageData messageData = constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 123L, 3, "someBssCode");
+		List<MessageData> inputValues = constructInputValues();
 
-		List<MessageData> inputValues = Collections.singletonList(messageData);
 		IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues, producerConfig);
 
 		//
@@ -90,9 +95,24 @@ public class MgwIntegrationTest {
 		consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
 		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
 		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-		List<MessageData> actualValues = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfig, outputTopic, inputValues.size());
+
+		List<MessageData> actualValues = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfig, outputTopic, 1, 5000L);
+
 		streams.close();
-		assertEquals(inputValues, actualValues);
+
+		System.out.println("### actualValues = " + actualValues);
+
+//		assertEquals(inputValues, actualValues);
+		assertEquals(2, actualValues.size());
+	}
+
+	private List<MessageData> constructInputValues() {
+		List<MessageData> list = new ArrayList<>();
+		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 111L, 3, "someBssCode"));
+		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 112L, 3, "someBssCode"));
+		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 222L, 3, null));
+		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 222L, 3, "someOtherBssCode"));
+		return list;
 	}
 
 	private MessageData constructMsgMessage(String src, String dest, Direction direction, Instant receivedInstant, boolean mms, Long partnerId, int individualMsgCount, String bssCode) {
@@ -120,6 +140,28 @@ public class MgwIntegrationTest {
 		// However, in the code below we intentionally override the default serdes in `to()` to
 		// demonstrate how you can construct and configure a specific Avro serde manually.
 		final Serde<String> stringSerde = Serdes.String();
+
+		final Serde<MessageData> specificAvroSerde = constructOutputSerde();
+
+		final Set<Long> allowedPartnerIds = constructPartnerIds();
+
+		StreamsBuilder builder = new StreamsBuilder();
+
+		KStream<String, MessageData> stream = builder.stream(inputTopic);
+		stream
+				.filter((key, value) -> allowedPartnerIds.contains(value.getContext().getPartnerId()) && value.getContext().getBssCode() != null)
+				.map((key, value) -> new KeyValue<>(extractSubscriberMsisdn(value.getMessage()), value))
+				.to(outputTopic, Produced.with(stringSerde, specificAvroSerde));
+
+		Properties streamsConfiguration = constructStreamsConfiguration();
+		return new KafkaStreams(builder.build(), streamsConfiguration);
+	}
+
+	private String extractSubscriberMsisdn(Message message) {
+		return message.getDirection().equals(Direction.SEND) ? message.getDest() : message.getSrc();
+	}
+
+	private Serde<MessageData> constructOutputSerde() {
 		final Serde<MessageData> specificAvroSerde = new SpecificAvroSerde<>();
 		// Note how we must manually call `configure()` on this serde to configure the schema registry
 		// url.  This is different from the case of setting default serdes (see `streamsConfiguration`
@@ -128,13 +170,7 @@ public class MgwIntegrationTest {
 		specificAvroSerde.configure(
 				Collections.singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl()),
 				isKeySerde);
-
-		StreamsBuilder builder = new StreamsBuilder();
-		KStream<String, MessageData> stream = builder.stream(inputTopic);
-		stream.to(outputTopic, Produced.with(stringSerde, specificAvroSerde));
-
-		Properties streamsConfiguration = constructStreamsConfiguration();
-		return new KafkaStreams(builder.build(), streamsConfiguration);
+		return specificAvroSerde;
 	}
 
 	private Properties constructStreamsConfiguration() {
@@ -146,5 +182,32 @@ public class MgwIntegrationTest {
 		streamsConfiguration.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
 		streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 		return streamsConfiguration;
+	}
+
+	private static Set<Long> constructPartnerIds() {
+		final Set<Long> set = new HashSet<>();
+		set.add(111L);
+		set.add(222L);
+		return set;
+	}
+
+
+	private static Map<String, Boolean> constructSubscriberPrepaidPostpaidRegistry() {
+		final Map<String, Boolean> map = new HashMap<>();
+		map.put("385912392624", true);
+		map.put("385912392625", false);
+		map.put("385912392626", false);
+		map.put("385912392627", false);
+		map.put("385912392628", true);
+		map.put("385912392629", false);
+		return map;
+	}
+
+	private static Map<String, List<RoamingInterval>> constructSubscriberRoamingIntervals() {
+		final Map<String, List<RoamingInterval>> map = new HashMap<>();
+		final Instant now = Instant.now();
+		map.put("385912392625", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(100), now.minusSeconds(80)), new RoamingInterval(false, now.minusSeconds(80), now.minusSeconds(30)), new RoamingInterval(true, now.minusSeconds(30), Instant.MAX)));
+		map.put("385912392626", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(50), Instant.MAX)));
+		return map;
 	}
 }
