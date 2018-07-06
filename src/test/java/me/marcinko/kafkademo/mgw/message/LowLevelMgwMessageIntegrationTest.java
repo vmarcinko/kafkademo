@@ -1,37 +1,35 @@
-package me.marcinko.kafkademo.mgw;
+package me.marcinko.kafkademo.mgw.message;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
-import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import me.marcinko.kafkademo.utils.EmbeddedSingleNodeKafkaCluster;
 import me.marcinko.kafkademo.utils.IntegrationTestUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Produced;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -45,9 +43,7 @@ import hr.kapsch.mgw.messaging.message.avro.MessageDeliveryStatus;
 import hr.kapsch.mgw.messaging.message.avro.MessagingContext;
 import hr.kapsch.mgw.messaging.message.avro.RoutingInfo;
 
-import static org.junit.Assert.assertEquals;
-
-public class MgwStreamsIntegrationTest {
+public class LowLevelMgwMessageIntegrationTest {
 	@ClassRule
 	public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
 
@@ -65,9 +61,6 @@ public class MgwStreamsIntegrationTest {
 		//
 		// Step 1: Configure and start the processor topology.
 		//
-
-		KafkaStreams streams = constructProcessingFlow();
-		streams.start();
 
 		//
 		// Step 2: Produce some input data to the input topic.
@@ -96,14 +89,85 @@ public class MgwStreamsIntegrationTest {
 		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
 		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
 
-		List<MessageData> actualValues = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfig, outputTopic, 1, 5000L);
+		Thread.sleep(3000L);
 
-		streams.close();
+		KafkaConsumer consumer = new KafkaConsumer<>(consumerConfig);
+		consumer.subscribe(Collections.singletonList(inputTopic));
 
-		System.out.println("### actualValues = " + actualValues);
+		final Set<Long> allowedPartnerIds = constructPartnerIds();
+		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
+		final Map<String, List<RoamingInterval>> roamingIntervals = constructSubscriberRoamingIntervals();
+
+		final List<MessageData> list = pollMgwMessages(consumer);
+		final List<MessageCount> messageCounts = list.stream()
+				.filter(messageData -> isMessageDataOfInterest(allowedPartnerIds, messageData))
+				.map(messageData -> {
+					final LocalDate localDate = Instant.ofEpochMilli(messageData.getMessage().getReceived()).atZone(ZoneId.systemDefault()).toLocalDate();
+					final Long partnerId = messageData.getContext().getPartnerId();
+					final boolean mms = messageData.getMessage().getContentTypeIn().equals(MessageContentType.MMS);
+					final String shortCode = messageData.getContext().getBssCode();
+					final long count = messageData.getMessage().getDirection().equals(Direction.SEND) ? messageData.getContext().getOutgoingCnt() : messageData.getContext().getIncomingCnt();
+					final MessageCountType messageCountType = resolveSubscriberCountType(messageData, prepaidPostpaidRegistry, roamingIntervals);
+					return new MessageCount(localDate, partnerId, mms, shortCode, messageCountType, count);
+				})
+				.collect(Collectors.toList());
+
+		System.out.println("### messageCounts = " + messageCounts);
+
+		consumer.close();
 
 //		assertEquals(inputValues, actualValues);
-		assertEquals(2, actualValues.size());
+	}
+
+	private static MessageCountType resolveSubscriberCountType(MessageData messageData, Map<String, Boolean> prepaidPostpaidRegistry, Map<String, List<RoamingInterval>> roamingIntervals) {
+		if (messageData.getMessage().getDirection().equals(Direction.SEND)) {
+			final String msisdn = messageData.getMessage().getDest();
+			if (prepaidPostpaidRegistry.containsKey(msisdn)) {
+				return MessageCountType.MT_TMOBILE;
+			}
+			else if (msisdn.startsWith("385")) {
+				return MessageCountType.MT_DOMESTIC;
+			}
+			else {
+				return MessageCountType.MT_FOREIGN;
+			}
+		}
+		else {
+			final String msisdn = messageData.getMessage().getSrc();
+			final Boolean prepaidType = prepaidPostpaidRegistry.get(msisdn);
+			if (prepaidType == null) {
+				return MessageCountType.MO_UNKNOWN;
+			}
+			else if (isSubscriberInRoaming(msisdn, Instant.ofEpochMilli(messageData.getMessage().getReceived()), roamingIntervals)) {
+				return MessageCountType.MO_IN_ROAMING;
+			}
+			else if (prepaidType) {
+				return MessageCountType.MO_PREPAID;
+			}
+			else {
+				return MessageCountType.MO_POSTPAID;
+			}
+		}
+	}
+
+	private static boolean isSubscriberInRoaming(String msisdn, Instant receivedInstant, Map<String, List<RoamingInterval>> roamingIntervals) {
+		final List<RoamingInterval> subscriberRoamingIntervals = roamingIntervals.get(msisdn);
+		if (subscriberRoamingIntervals == null) {
+			return false;
+		}
+		else {
+			final Optional<RoamingInterval> matchedInterval = subscriberRoamingIntervals.stream().filter(roamingInterval -> receivedInstant.isBefore(roamingInterval.getTimeTo()) && !receivedInstant.isBefore(roamingInterval.getTimeTo())).findFirst();
+			return matchedInterval.map(RoamingInterval::isInRoaming).orElse(false);
+		}
+	}
+
+	private List<MessageData> pollMgwMessages(KafkaConsumer consumer) {
+		ConsumerRecords<?, MessageData> consumerRecords = consumer.poll(10000L);
+		List<MessageData> list = new ArrayList<>();
+		for (ConsumerRecord<?, MessageData> consumerRecord : consumerRecords) {
+			list.add(consumerRecord.value());
+		}
+		return list;
 	}
 
 	private List<MessageData> constructInputValues() {
@@ -128,60 +192,8 @@ public class MgwStreamsIntegrationTest {
 		return new MessageData(message, context);
 	}
 
-	private KafkaStreams constructProcessingFlow() {
-		// Write the input data as-is to the output topic.
-		//
-		// Normally, because a) we have already configured the correct default serdes for keys and
-		// values and b) the types for keys and values are the same for both the input topic and the
-		// output topic, we would only need to define:
-		//
-		//   builder.stream(inputTopic).to(outputTopic);
-		//
-		// However, in the code below we intentionally override the default serdes in `to()` to
-		// demonstrate how you can construct and configure a specific Avro serde manually.
-		final Serde<String> stringSerde = Serdes.String();
-
-		final Serde<MessageData> specificAvroSerde = constructOutputSerde();
-
-		final Set<Long> allowedPartnerIds = constructPartnerIds();
-
-		StreamsBuilder builder = new StreamsBuilder();
-
-		KStream<String, MessageData> stream = builder.stream(inputTopic);
-		stream
-				.filter((key, value) -> allowedPartnerIds.contains(value.getContext().getPartnerId()) && value.getContext().getBssCode() != null)
-				.map((key, value) -> new KeyValue<>(extractSubscriberMsisdn(value.getMessage()), value))
-				.to(outputTopic, Produced.with(stringSerde, specificAvroSerde));
-
-		Properties streamsConfiguration = constructStreamsConfiguration();
-		return new KafkaStreams(builder.build(), streamsConfiguration);
-	}
-
-	private String extractSubscriberMsisdn(Message message) {
-		return message.getDirection().equals(Direction.SEND) ? message.getDest() : message.getSrc();
-	}
-
-	private Serde<MessageData> constructOutputSerde() {
-		final Serde<MessageData> specificAvroSerde = new SpecificAvroSerde<>();
-		// Note how we must manually call `configure()` on this serde to configure the schema registry
-		// url.  This is different from the case of setting default serdes (see `streamsConfiguration`
-		// above), which will be auto-configured based on the `StreamsConfiguration` instance.
-		final boolean isKeySerde = false;
-		specificAvroSerde.configure(
-				Collections.singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl()),
-				isKeySerde);
-		return specificAvroSerde;
-	}
-
-	private Properties constructStreamsConfiguration() {
-		Properties streamsConfiguration = new Properties();
-		streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "specific-avro-integration-test");
-		streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-		streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass().getName());
-		streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, SpecificAvroSerde.class);
-		streamsConfiguration.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
-		streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-		return streamsConfiguration;
+	private boolean isMessageDataOfInterest(Set<Long> allowedPartnerIds, MessageData value) {
+		return allowedPartnerIds.contains(value.getContext().getPartnerId()) && value.getContext().getBssCode() != null;
 	}
 
 	private static Set<Long> constructPartnerIds() {

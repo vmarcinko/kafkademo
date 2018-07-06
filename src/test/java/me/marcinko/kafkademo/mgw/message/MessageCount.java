@@ -1,4 +1,4 @@
-package me.marcinko.kafkademo.mgw;
+package me.marcinko.kafkademo.mgw.message;
 
 import java.time.LocalDate;
 import java.util.Objects;
