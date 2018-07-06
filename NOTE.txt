@@ -1,0 +1,119 @@
+global _settings tablica i profit_range_bonus_ptgs imaju "monetary_amount" kolone koje bi se trebale drugaije zvati
+
+MESSAGE COUNT:
+---------------
+
+group by:
+	date, partner_id, msgType, shortCode, subscriberType
+
+SubscriberType:
+	MT:
+		- TMOBILE: ako MSISDN je pronadjen medju subscriberima
+		- DOMESTIC: ako MSISDN nije pronadjen medju subscriberima, a počinje s '385'
+		- FOREIGN: ako MSISDN nije pronadjen medju subscriberima, a ne počinje s '385'
+	MO:
+		- UNKNOWN: ako MSISDN nije pronadjen (koji se pribraja kasnije prepaid-u)
+		. IN_ROAMING: ako MSISDN je pronadjen da je u roamingu u tom trenutku
+		- PREPAID: ako je MSISDN pronadjen kao prepaidu
+		otis gospodnetić
+
+		- POSTPAID: ako je MSISDN pronadjen kao postpaid
+
+CHARGING REQUEST:
+------------------
+
+date, partner_id, billing_text, subscriberType (prepaid/postpaid), total_amount, transaction_count
+
+
+Old SQL queries on MGW schema:
+
+    public static String constructMtMessagingQuery(String mgwSchemaName, boolean useDoyInQuery) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("select ");
+        sb.append("m.partner_id as partner_mgw_id, ");
+        sb.append("m.type as msg_type, ");
+        sb.append("md.short_code as short_code, ");
+        sb.append("decode_mt_user_type(sb.user_type, md.address_normalized) as end_user_type, ");
+        sb.append("count(*) as msg_count ");
+        sb.append("from ");
+        sb.append(mgwSchemaName).append(".message m ");
+        sb.append("inner join ");
+        sb.append(mgwSchemaName).append(".message_delivery md on (md.message_id = m.id and md.doy = m.doy) ");
+        sb.append("left outer join ");
+        sb.append("subscribers sb on (sb.msisdn = md.address_normalized) ");
+        sb.append("where ");
+        if (useDoyInQuery) {
+            sb.append("m.doy = :current_doy and ");
+        }
+        sb.append("m.received_date >= :received_date_start and m.received_date < :received_date_end and ");
+        sb.append("m.partner_id in (:mgw_partner_ids) and ");
+        sb.append("m.direction = 0 and (m.transcoding_status = 0 or m.transcoding_status = 2) and ");
+        sb.append("md.short_code is not null and md.status <> -11 and (m.type = 0 or m.type = 1) ");
+        sb.append("group by ");
+        sb.append("m.partner_id, m.type, md.short_code, decode_mt_user_type(sb.user_type, md.address_normalized)");
+        return sb.toString();
+    }
+
+    public static String constructMoMessagingQuery(String mgwSchemaName, boolean useDoyInQuery) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("select ");
+        sb.append("m.partner_id as partner_mgw_id, ");
+        sb.append("decode(m.type, 1, 1, 0) as msg_type, ");
+        sb.append("md.short_code as short_code, ");
+        sb.append("decode_mo_user_type(sb.user_type, rh.roaming_status) as end_user_type, ");
+        sb.append("count(*) as msg_count ");
+        sb.append("from ");
+        sb.append(mgwSchemaName).append(".message m ");
+        sb.append("inner join ");
+        sb.append(mgwSchemaName).append(".message_delivery md on (md.message_id = m.id and md.doy = m.doy) ");
+        sb.append("left outer join ");
+        sb.append("subscribers sb on (sb.msisdn = m.source_normalized) ");
+        sb.append("left outer join ");
+        sb.append("roaming_history rh on (sb.msisdn = rh.msisdn) ");
+        sb.append("where ");
+        if (useDoyInQuery) {
+            sb.append("m.doy = :current_doy and ");
+        }
+        sb.append("m.received_date >= :received_date_start and m.received_date < :received_date_end and ");
+        sb.append("((rh.msisdn is not null and m.received_date >= rh.period_start and m.received_date < rh.period_end) or rh.msisdn is null) and ");
+        sb.append("m.partner_id in (:mgw_partner_ids) and ");
+        sb.append("md.short_code is not null and md.status <> -11 and m.delivery_report = 0 and m.direction = 1 and (m.transcoding_status = 0 or m.transcoding_status = 1) ");
+        sb.append("group by ");
+        sb.append("m.partner_id, decode(m.type, 1, 1, 0), md.short_code, decode_mo_user_type(sb.user_type, rh.roaming_status)");
+        return sb.toString();
+    }
+
+    public static String constructChargingQuery(String mgwSchemaName, boolean useDoyInQuery) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("select ");
+        sb.append("vp.partner_id as partner_mgw_id, ");
+        sb.append("cr.billing_text as billing_text, ");
+        sb.append("sb.user_type end_user_type, ");
+        sb.append("sum(cr.amount) as amount, ");
+        sb.append("count(*) as transaction_count ");
+        sb.append("from ");
+        sb.append(mgwSchemaName).append(".charging_request cr ");
+        sb.append("inner join ");
+        sb.append(mgwSchemaName).append(".vas_port vp on (cr.vasport_id = vp.id) ");
+        sb.append("inner join ");
+        sb.append(mgwSchemaName).append(".charging_request cr2 on (cr.reservation_id = cr2.reservation_id) ");
+        sb.append("left outer join ");
+        sb.append("subscribers sb on (sb.msisdn = cr2.end_user_address) ");
+        sb.append("where ");
+        if (useDoyInQuery) {
+            sb.append("cr.doy = :current_doy and ");
+        }
+        sb.append("cr.received_date >= :received_date_start and cr.received_date < :received_date_end and ");
+        sb.append("vp.partner_id in (:mgw_partner_ids) and ");
+        sb.append("cr.type = 2 and cr.success = 1 and cr.id <> cr2.id and cr2.type = 0 ");
+        sb.append("group by ");
+        sb.append("vp.partner_id, cr.billing_text, sb.user_type");
+        return sb.toString();
+    }
+
+AVRO:
+
+type (SMS/MMS) : "contentTypeIn" ili context/"contentTypeOut"
+direction: "direction"
+short_code: context/"bssCode"
+partner_id: context/"partnerId"

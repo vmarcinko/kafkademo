@@ -8,15 +8,15 @@ public class MessageCount {
 	private final Long partnerId;
 	private final boolean mms;
 	private final String shortCode;
-	private final MessageCountType messageCountType;
+	private final MessageCountType type;
 	private final long count;
 
-	public MessageCount(LocalDate localDate, Long partnerId, boolean mms, String shortCode, MessageCountType messageCountType, long count) {
+	public MessageCount(LocalDate localDate, Long partnerId, boolean mms, String shortCode, MessageCountType type, long count) {
 		this.localDate = localDate;
 		this.partnerId = partnerId;
 		this.mms = mms;
 		this.shortCode = shortCode;
-		this.messageCountType = messageCountType;
+		this.type = type;
 		this.count = count;
 	}
 
@@ -36,8 +36,8 @@ public class MessageCount {
 		return shortCode;
 	}
 
-	public MessageCountType getMessageCountType() {
-		return messageCountType;
+	public MessageCountType getType() {
+		return type;
 	}
 
 	public long getCount() {
@@ -58,12 +58,12 @@ public class MessageCount {
 				Objects.equals(localDate, that.localDate) &&
 				Objects.equals(partnerId, that.partnerId) &&
 				Objects.equals(shortCode, that.shortCode) &&
-				messageCountType == that.messageCountType;
+				type == that.type;
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(localDate, partnerId, mms, shortCode, messageCountType, count);
+		return Objects.hash(localDate, partnerId, mms, shortCode, type, count);
 	}
 
 	@Override
@@ -73,7 +73,7 @@ public class MessageCount {
 		sb.append(", partnerId=").append(partnerId);
 		sb.append(", mms=").append(mms);
 		sb.append(", shortCode='").append(shortCode).append('\'');
-		sb.append(", messageCountType=").append(messageCountType);
+		sb.append(", type=").append(type);
 		sb.append(", count=").append(count);
 		sb.append('}');
 		return sb.toString();

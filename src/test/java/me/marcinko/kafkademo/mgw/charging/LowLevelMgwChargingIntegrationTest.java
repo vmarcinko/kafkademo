@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -19,9 +18,6 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
-import me.marcinko.kafkademo.mgw.message.MessageCount;
-import me.marcinko.kafkademo.mgw.message.MessageCountType;
-import me.marcinko.kafkademo.mgw.message.RoamingInterval;
 import me.marcinko.kafkademo.utils.EmbeddedSingleNodeKafkaCluster;
 import me.marcinko.kafkademo.utils.IntegrationTestUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -34,6 +30,8 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import hr.kapsch.mgw.charging.ChargingRequestType;
 import hr.kapsch.mgw.charging.avro.ChargingContext;
@@ -41,10 +39,10 @@ import hr.kapsch.mgw.charging.avro.ChargingParty;
 import hr.kapsch.mgw.charging.avro.ChargingRequest;
 import hr.kapsch.mgw.charging.avro.ChargingRequestData;
 import hr.kapsch.mgw.domain.Direction;
-import hr.kapsch.mgw.messaging.message.avro.MessageContentType;
-import hr.kapsch.mgw.messaging.message.avro.MessageData;
 
 public class LowLevelMgwChargingIntegrationTest {
+	private final Logger logger = LoggerFactory.getLogger(LowLevelMgwChargingIntegrationTest.class);
+
 	@ClassRule
 	public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
 
@@ -98,54 +96,57 @@ public class LowLevelMgwChargingIntegrationTest {
 		final Set<Long> allowedPartnerIds = constructPartnerIds();
 		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
 
-		final List<MessageData> list = pollMgwMessages(consumer);
-		final List<MessageCount> messageCounts = list.stream()
-				.filter(messageData -> isMessageDataOfInterest(allowedPartnerIds, messageData))
-				.map(messageData -> {
-					final LocalDate localDate = Instant.ofEpochMilli(messageData.getMessage().getReceived()).atZone(ZoneId.systemDefault()).toLocalDate();
-					final Long partnerId = messageData.getContext().getPartnerId();
-					final boolean mms = messageData.getMessage().getContentTypeIn().equals(MessageContentType.MMS);
-					final String shortCode = messageData.getContext().getBssCode();
-					final long count = messageData.getMessage().getDirection().equals(Direction.SEND) ? messageData.getContext().getOutgoingCnt() : messageData.getContext().getIncomingCnt();
-					final MessageCountType messageCountType = resolveSubscriberCountType(messageData.getMessage().getDest(), prepaidPostpaidRegistry);
-					return new MessageCount(localDate, partnerId, mms, shortCode, messageCountType, count);
-				})
+		final List<ChargingRequestData> list = pollMgwMessages(consumer);
+		final List<ChargingRequestData> validRequestDatas = list.stream()
+				.filter(chargingRequestData -> isRequestOfInterest(allowedPartnerIds, chargingRequestData))
 				.collect(Collectors.toList());
 
-		System.out.println("### messageCounts = " + messageCounts);
+		final Map<String, ChargingTransaction> reservedTransactionByIds = validRequestDatas.stream()
+				.filter(requestData -> requestData.getRequest().getType().equals(ChargingRequestType.RESERVE))
+				.map(requestData -> constructTransaction(prepaidPostpaidRegistry, requestData))
+				.collect(Collectors.toMap(ChargingTransaction::getReservationId, o -> o));
+
+		final Set<String> chargedTransactionIds = validRequestDatas.stream()
+				.filter(requestData -> requestData.getRequest().getType().equals(ChargingRequestType.CHARGE))
+				.map(requestData -> requestData.getRequest().getReservationId())
+				.collect(Collectors.toSet());
+
 
 		consumer.close();
 
 //		assertEquals(inputValues, actualValues);
 	}
 
-	private static MessageCountType resolveSubscriberCountType(String msisdn, Map<String, Boolean> prepaidPostpaidRegistry) {
-		if (prepaidPostpaidRegistry.containsKey(msisdn)) {
-			return MessageCountType.MT_TMOBILE;
+	private ChargingTransaction constructTransaction(Map<String, Boolean> prepaidPostpaidRegistry, ChargingRequestData requestData) {
+		final String reservationId = requestData.getRequest().getReservationId();
+		final LocalDate localDate = Instant.ofEpochMilli(requestData.getRequest().getReceived()).atZone(ZoneId.systemDefault()).toLocalDate();
+		final Long partnerId = requestData.getContext().getPartnerId();
+		final String billingText = requestData.getRequest().getBillingText();
+		final ChargingSubscriberType chargingSubscriberType = resolveChargingCountType(requestData.getRequest().getEndUserAddress(), prepaidPostpaidRegistry);
+		return new ChargingTransaction(reservationId, localDate, partnerId, billingText, chargingSubscriberType);
+	}
+
+	private boolean isRequestOfInterest(Set<Long> allowedPartnerIds, ChargingRequestData chargingRequestData) {
+		return allowedPartnerIds.contains(chargingRequestData.getContext().getPartnerId()) && chargingRequestData.getContext().getSuccess();
+	}
+
+	private static ChargingSubscriberType resolveChargingCountType(String msisdn, Map<String, Boolean> prepaidPostpaidRegistry) {
+		Boolean prepaid = prepaidPostpaidRegistry.get(msisdn);
+		if (prepaid == null) {
+			return ChargingSubscriberType.UNKNOWN;
 		}
-		else if (msisdn.startsWith("385")) {
-			return MessageCountType.MT_DOMESTIC;
+		else if (prepaid.equals(Boolean.TRUE)) {
+			return ChargingSubscriberType.PREPAID;
 		}
 		else {
-			return MessageCountType.MT_FOREIGN;
+			return ChargingSubscriberType.POSTPAID;
 		}
 	}
 
-	private static boolean isSubscriberInRoaming(String msisdn, Instant receivedInstant, Map<String, List<RoamingInterval>> roamingIntervals) {
-		final List<RoamingInterval> subscriberRoamingIntervals = roamingIntervals.get(msisdn);
-		if (subscriberRoamingIntervals == null) {
-			return false;
-		}
-		else {
-			final Optional<RoamingInterval> matchedInterval = subscriberRoamingIntervals.stream().filter(roamingInterval -> receivedInstant.isBefore(roamingInterval.getTimeTo()) && !receivedInstant.isBefore(roamingInterval.getTimeTo())).findFirst();
-			return matchedInterval.map(RoamingInterval::isInRoaming).orElse(false);
-		}
-	}
-
-	private List<MessageData> pollMgwMessages(KafkaConsumer consumer) {
-		ConsumerRecords<?, MessageData> consumerRecords = consumer.poll(10000L);
-		List<MessageData> list = new ArrayList<>();
-		for (ConsumerRecord<?, MessageData> consumerRecord : consumerRecords) {
+	private List<ChargingRequestData> pollMgwMessages(KafkaConsumer consumer) {
+		ConsumerRecords<?, ChargingRequestData> consumerRecords = consumer.poll(10000L);
+		List<ChargingRequestData> list = new ArrayList<>();
+		for (ConsumerRecord<?, ChargingRequestData> consumerRecord : consumerRecords) {
 			list.add(consumerRecord.value());
 		}
 		return list;
@@ -162,10 +163,6 @@ public class LowLevelMgwChargingIntegrationTest {
 		final ChargingRequest request = new ChargingRequest(UUID.randomUUID().toString(), reservationId, time, ChargingRequestType.RESERVE, endUserAddress, amount, billingText, null, true, 321L, ChargingParty.END_USER, Direction.SEND, null, null, null, null, null, "SOmeBssCode", null, null, null, null, null, null, null);
 		final ChargingContext context = new ChargingContext(reservationId, partnerId, 123L, 223L, 334L, 123L, success, null, false, null);
 		return new ChargingRequestData(request, context);
-	}
-
-	private boolean isMessageDataOfInterest(Set<Long> allowedPartnerIds, MessageData value) {
-		return allowedPartnerIds.contains(value.getContext().getPartnerId()) && value.getContext().getBssCode() != null;
 	}
 
 	private static Set<Long> constructPartnerIds() {
