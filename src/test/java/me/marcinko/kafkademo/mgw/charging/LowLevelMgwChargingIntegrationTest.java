@@ -61,10 +61,15 @@ public class LowLevelMgwChargingIntegrationTest {
 
 		final ReservedChargingTransactionStore reservedChargingTransactionStore = new InMemoryReservedChargingTransactionStoreImpl();
 
-		final KafkaConsumer consumer = constructConsumer();
-
 		final Set<Long> allowedPartnerIds = constructPartnerIds();
 		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
+
+		consumeTopicValues(reservedChargingTransactionStore, allowedPartnerIds, prepaidPostpaidRegistry);
+		consumeTopicValues(reservedChargingTransactionStore, allowedPartnerIds, prepaidPostpaidRegistry);
+	}
+
+	private void consumeTopicValues(ReservedChargingTransactionStore reservedChargingTransactionStore, Set<Long> allowedPartnerIds, Map<String, Boolean> prepaidPostpaidRegistry) throws InterruptedException {
+		final KafkaConsumer consumer = constructConsumer();
 
 		final List<ChargingRequestData> allPolledChargingRequests = pollMgwMessages(consumer);
 		final List<ChargingRequestData> relevantPolledChargingRequests = allPolledChargingRequests.stream()
@@ -88,7 +93,9 @@ public class LowLevelMgwChargingIntegrationTest {
 				.filter(reservedTransaction -> !chargedTransactionIds.contains(reservedTransaction.getReservationId()))
 				.collect(Collectors.toSet());
 
-		reservedChargingTransactionStore.store(nonStoredReservedTransactions);
+		if (!nonStoredReservedTransactions.isEmpty()) {
+			reservedChargingTransactionStore.store(nonStoredReservedTransactions);
+		}
 
 		final Set<ChargingTransaction> nonStoredChargedTransactions = polledReservedTransactions.stream()
 				.filter(reservedTransaction -> chargedTransactionIds.contains(reservedTransaction.getReservationId()))
@@ -101,7 +108,7 @@ public class LowLevelMgwChargingIntegrationTest {
 
 		System.out.println("### chargedTransactions = " + chargedTransactions);
 
-		consumer.commitSync();
+//		consumer.commitSync();
 		consumer.close();
 	}
 
