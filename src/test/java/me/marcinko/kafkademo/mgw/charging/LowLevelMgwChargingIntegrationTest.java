@@ -96,25 +96,69 @@ public class LowLevelMgwChargingIntegrationTest {
 		final Set<Long> allowedPartnerIds = constructPartnerIds();
 		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
 
-		final List<ChargingRequestData> list = pollMgwMessages(consumer);
-		final List<ChargingRequestData> validRequestDatas = list.stream()
+		final List<ChargingRequestData> allPolledChargingRequests = pollMgwMessages(consumer);
+		final List<ChargingRequestData> relevantPolledChargingRequests = allPolledChargingRequests.stream()
 				.filter(chargingRequestData -> isRequestOfInterest(allowedPartnerIds, chargingRequestData))
 				.collect(Collectors.toList());
 
-		final Map<String, ChargingTransaction> reservedTransactionByIds = validRequestDatas.stream()
+		// all reserved transactions in this poll
+		final Set<ChargingTransaction> polledReservedTransactions = relevantPolledChargingRequests.stream()
 				.filter(requestData -> requestData.getRequest().getType().equals(ChargingRequestType.RESERVE))
 				.map(requestData -> constructTransaction(prepaidPostpaidRegistry, requestData))
-				.collect(Collectors.toMap(ChargingTransaction::getReservationId, o -> o));
+				.collect(Collectors.toSet());
 
-		final Set<String> chargedTransactionIds = validRequestDatas.stream()
+		// IDs of all charged transactions in this poll
+		final Set<String> chargedTransactionIds = relevantPolledChargingRequests.stream()
 				.filter(requestData -> requestData.getRequest().getType().equals(ChargingRequestType.CHARGE))
 				.map(requestData -> requestData.getRequest().getReservationId())
 				.collect(Collectors.toSet());
 
+		// all polled reserved transactions not being charged in this poll, so we should store these for later charging
+		final Set<ChargingTransaction> nonStoredReservedTransactions = polledReservedTransactions.stream()
+				.filter(reservedTransaction -> !chargedTransactionIds.contains(reservedTransaction.getReservationId()))
+				.collect(Collectors.toSet());
+
+		storeNonStoredReservedTransactions(nonStoredReservedTransactions);
+
+		final Set<ChargingTransaction> nonStoredChargedTransactions = polledReservedTransactions.stream()
+				.filter(reservedTransaction -> chargedTransactionIds.contains(reservedTransaction.getReservationId()))
+				.collect(Collectors.toSet());
+
+		final Set<String> storedChargedTransactionIds = calculateStoredChargedTransactionIds(chargedTransactionIds, nonStoredChargedTransactions);
+		final Set<ChargingTransaction> storedChargedTransactions = findAndDeleteStoredChargedTransactionsByIds(storedChargedTransactionIds);
+
+		final Set<ChargingTransaction> chargedTransactions = union(nonStoredChargedTransactions, storedChargedTransactions);
 
 		consumer.close();
 
 //		assertEquals(inputValues, actualValues);
+	}
+
+	private <T> Set<T> union(Set<T> set1, Set<T> set2) {
+		Set<T> set = new HashSet<>(set1);
+		set.addAll(set2);
+		return set;
+	}
+
+	private Set<String> calculateStoredChargedTransactionIds(Set<String> chargedTransactionIds, Set<ChargingTransaction> nonStoredChargedTransactions) {
+		final Set<String> nonStoredChargedTransactionIds = nonStoredChargedTransactions.stream().map(ChargingTransaction::getReservationId).collect(Collectors.toSet());
+
+		// these tx IDs should point to some transactions in local stores
+		final Set<String> storedChargedTransactionIds = new HashSet<>(chargedTransactionIds);
+		storedChargedTransactionIds.removeAll(nonStoredChargedTransactionIds);
+		return storedChargedTransactionIds;
+	}
+
+	private Set<ChargingTransaction> findAndDeleteStoredChargedTransactionsByIds(Set<String> storedChargedTransactionIds) {
+		return null;
+	}
+
+	private void storeNonStoredReservedTransactions(Set<ChargingTransaction> nonStoredReservedTransactions) {
+
+	}
+
+	private Set<ChargingTransaction> findChargedStoredTransactions(Set<ChargingTransaction> nonChargedTransactions) {
+		return null;
 	}
 
 	private ChargingTransaction constructTransaction(Map<String, Boolean> prepaidPostpaidRegistry, ChargingRequestData requestData) {
