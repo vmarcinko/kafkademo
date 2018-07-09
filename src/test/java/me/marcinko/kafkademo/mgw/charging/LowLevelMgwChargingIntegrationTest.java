@@ -57,41 +57,11 @@ public class LowLevelMgwChargingIntegrationTest {
 
 	@Test
 	public void shouldRoundTripSpecificAvroDataThroughKafka() throws Exception {
-		//
-		// Step 1: Configure and start the processor topology.
-		//
+		produceTopicValues();
 
-		//
-		// Step 2: Produce some input data to the input topic.
-		//
-		Properties producerConfig = new Properties();
-		producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-		producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-		producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
-		producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-		producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
-		producerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
+		final ReservedChargingTransactionStore reservedChargingTransactionStore = new InMemoryReservedChargingTransactionStoreImpl();
 
-		List<ChargingRequestData> inputValues = constructInputValues();
-
-		IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues, producerConfig);
-
-		//
-		// Step 3: Verify the application's output data.
-		//
-		Properties consumerConfig = new Properties();
-		consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-		consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "specific-avro-integration-test-standard-consumer");
-		consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-		consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-		consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
-		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
-		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-
-		Thread.sleep(3000L);
-
-		KafkaConsumer consumer = new KafkaConsumer<>(consumerConfig);
-		consumer.subscribe(Collections.singletonList(inputTopic));
+		final KafkaConsumer consumer = constructConsumer();
 
 		final Set<Long> allowedPartnerIds = constructPartnerIds();
 		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
@@ -118,20 +88,81 @@ public class LowLevelMgwChargingIntegrationTest {
 				.filter(reservedTransaction -> !chargedTransactionIds.contains(reservedTransaction.getReservationId()))
 				.collect(Collectors.toSet());
 
-		storeNonStoredReservedTransactions(nonStoredReservedTransactions);
+		reservedChargingTransactionStore.store(nonStoredReservedTransactions);
 
 		final Set<ChargingTransaction> nonStoredChargedTransactions = polledReservedTransactions.stream()
 				.filter(reservedTransaction -> chargedTransactionIds.contains(reservedTransaction.getReservationId()))
 				.collect(Collectors.toSet());
 
 		final Set<String> storedChargedTransactionIds = calculateStoredChargedTransactionIds(chargedTransactionIds, nonStoredChargedTransactions);
-		final Set<ChargingTransaction> storedChargedTransactions = findAndDeleteStoredChargedTransactionsByIds(storedChargedTransactionIds);
+		final Set<ChargingTransaction> storedChargedTransactions = findAndDeleteStoredReservedTransactionByIds(reservedChargingTransactionStore, storedChargedTransactionIds);
 
 		final Set<ChargingTransaction> chargedTransactions = union(nonStoredChargedTransactions, storedChargedTransactions);
 
-		consumer.close();
+		System.out.println("### chargedTransactions = " + chargedTransactions);
 
-//		assertEquals(inputValues, actualValues);
+		consumer.commitSync();
+		consumer.close();
+	}
+
+	private Set<ChargingTransaction> findAndDeleteStoredReservedTransactionByIds(ReservedChargingTransactionStore reservedChargingTransactionStore, Set<String> storedChargedTransactionIds) {
+		if (storedChargedTransactionIds.isEmpty()) {
+			return Collections.emptySet();
+		}
+		else {
+			final Set<ChargingTransaction> storedChargedTransactions = new HashSet<>(reservedChargingTransactionStore.findByIdIn(storedChargedTransactionIds));
+			reservedChargingTransactionStore.deletByIdIn(storedChargedTransactionIds);
+			return storedChargedTransactions;
+		}
+	}
+
+	private KafkaConsumer constructConsumer() throws InterruptedException {
+		Properties consumerConfig = new Properties();
+		consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+		consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "specific-avro-integration-test-standard-consumer");
+		consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+		consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+		consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
+		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+
+		Thread.sleep(3000L);
+
+		KafkaConsumer consumer = new KafkaConsumer<>(consumerConfig);
+		consumer.subscribe(Collections.singletonList(inputTopic));
+		return consumer;
+	}
+
+	private List<ChargingRequestData> constructInputValues() {
+		List<ChargingRequestData> list = new ArrayList<>();
+		list.add(constructReserveRequest("rId1", 111L, true, "385912392624", 123.4, "billTxt1", Instant.now()));
+		list.add(constructReserveRequest("rId2", 111L, true, "385912392625", 101.4, "billTxt2", Instant.now()));
+		list.add(constructChargeRequest("rId2", 111L, true, Instant.now()));
+		return list;
+	}
+
+	private ChargingRequestData constructChargeRequest(String reservationId, long partnerId, boolean success, Instant receivedInsant) {
+		long time = receivedInsant.toEpochMilli();
+		final ChargingRequest request = new ChargingRequest(UUID.randomUUID().toString(), reservationId, time, ChargingRequestType.CHARGE, null, null, null, null, true, 321L, ChargingParty.END_USER, Direction.SEND, null, null, null, null, null, "SOmeBssCode", null, null, null, null, null, null, null);
+		final ChargingContext context = new ChargingContext(reservationId, partnerId, 123L, 223L, 334L, 123L, success, null, false, null);
+		return new ChargingRequestData(request, context);
+	}
+
+	private void produceTopicValues() throws java.util.concurrent.ExecutionException, InterruptedException {
+		//
+		// Step 2: Produce some input data to the input topic.
+		//
+		Properties producerConfig = new Properties();
+		producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+		producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+		producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
+		producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+		producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
+		producerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
+
+		List<ChargingRequestData> inputValues = constructInputValues();
+
+		IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues, producerConfig);
 	}
 
 	private <T> Set<T> union(Set<T> set1, Set<T> set2) {
@@ -147,18 +178,6 @@ public class LowLevelMgwChargingIntegrationTest {
 		final Set<String> storedChargedTransactionIds = new HashSet<>(chargedTransactionIds);
 		storedChargedTransactionIds.removeAll(nonStoredChargedTransactionIds);
 		return storedChargedTransactionIds;
-	}
-
-	private Set<ChargingTransaction> findAndDeleteStoredChargedTransactionsByIds(Set<String> storedChargedTransactionIds) {
-		return null;
-	}
-
-	private void storeNonStoredReservedTransactions(Set<ChargingTransaction> nonStoredReservedTransactions) {
-
-	}
-
-	private Set<ChargingTransaction> findChargedStoredTransactions(Set<ChargingTransaction> nonChargedTransactions) {
-		return null;
 	}
 
 	private ChargingTransaction constructTransaction(Map<String, Boolean> prepaidPostpaidRegistry, ChargingRequestData requestData) {
@@ -193,12 +212,6 @@ public class LowLevelMgwChargingIntegrationTest {
 		for (ConsumerRecord<?, ChargingRequestData> consumerRecord : consumerRecords) {
 			list.add(consumerRecord.value());
 		}
-		return list;
-	}
-
-	private List<ChargingRequestData> constructInputValues() {
-		List<ChargingRequestData> list = new ArrayList<>();
-		list.add(constructReserveRequest("rId1", 111L, true, "385912392624", 123.4, "billTxt1", Instant.now()));
 		return list;
 	}
 
