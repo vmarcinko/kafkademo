@@ -23,11 +23,12 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import me.marcinko.kafkademo.utils.EmbeddedSingleNodeKafkaCluster;
 import me.marcinko.kafkademo.utils.IntegrationTestUtils;
+import me.marcinko.kafkademo.utils.PollResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.BeforeClass;
@@ -58,13 +59,82 @@ public class LowLevelMgwMessageIntegrationTest {
 
 	@Test
 	public void shouldRoundTripSpecificAvroDataThroughKafka() throws Exception {
-		//
-		// Step 1: Configure and start the processor topology.
-		//
+		produceInputValues();
 
-		//
-		// Step 2: Produce some input data to the input topic.
-		//
+		final KafkaConsumer consumer = constructConsumer();
+		consumeKafkaRecords(consumer);
+		consumer.close();
+
+//		assertEquals(inputValues, actualValues);
+	}
+
+	private void consumeKafkaRecords(KafkaConsumer consumer) throws InterruptedException {
+		System.out.println("### Starting consuming task");
+
+		final Set<Long> allowedPartnerIds = fetchPartnerIds();
+		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
+		final Map<String, List<RoamingInterval>> roamingIntervals = constructSubscriberRoamingIntervals();
+
+		PollResult<MessageData> pollResult = null;
+
+		boolean resetted = true;
+		while (!(pollResult = pollMgwMessages(consumer)).getValues().isEmpty()) {
+			System.out.println("### pollResult = " + pollResult);
+			System.out.println("### list (" + pollResult.getValues().size() + ") = " + pollResult.getValues());
+
+			final List<MessageCount> messageCounts = pollResult.getValues().stream()
+					.filter(messageData -> isMessageDataOfInterest(allowedPartnerIds, messageData))
+					.map(messageData -> {
+						final LocalDate localDate = Instant.ofEpochMilli(messageData.getMessage().getReceived()).atZone(ZoneId.systemDefault()).toLocalDate();
+						final Long partnerId = messageData.getContext().getPartnerId();
+						final boolean mms = messageData.getMessage().getContentTypeIn().equals(MessageContentType.MMS);
+						final String shortCode = messageData.getContext().getBssCode();
+						final long count = messageData.getMessage().getDirection().equals(Direction.SEND) ? messageData.getContext().getOutgoingCnt() : messageData.getContext().getIncomingCnt();
+						final MessageCountType messageCountType = resolveSubscriberCountType(messageData, prepaidPostpaidRegistry, roamingIntervals);
+						return new MessageCount(localDate, partnerId, mms, shortCode, messageCountType, count);
+					})
+					.collect(Collectors.toList());
+
+			System.out.println("### messageCounts = " + messageCounts);
+
+			consumer.commitSync();
+
+			if (!resetted) {
+				resetConsumerToFirstRecordOffsets(consumer, pollResult);
+				resetted = true;
+			}
+		}
+
+		System.out.println("### Ending consuming task");
+	}
+
+	private void resetConsumerToFirstRecordOffsets(KafkaConsumer consumer, PollResult<MessageData> pollResult) {
+		for (Map.Entry<TopicPartition, Long> entry : pollResult.getFirstRecordOffsetByPartition().entrySet()) {
+			final TopicPartition partition = entry.getKey();
+			long offset = entry.getValue();
+			consumer.seek(partition, offset);
+		}
+	}
+
+	private KafkaConsumer constructConsumer() throws InterruptedException {
+		Properties consumerConfig = new Properties();
+		consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+		consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "specific-avro-integration-test-standard-consumer");
+		consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+		consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+		consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
+		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+		consumerConfig.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 3);
+		consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+		KafkaConsumer consumer = new KafkaConsumer<>(consumerConfig);
+		consumer.subscribe(Collections.singletonList(inputTopic));
+
+		return consumer;
+	}
+
+	private void produceInputValues() throws java.util.concurrent.ExecutionException, InterruptedException {
 		Properties producerConfig = new Properties();
 		producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 		producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -76,47 +146,6 @@ public class LowLevelMgwMessageIntegrationTest {
 		List<MessageData> inputValues = constructInputValues();
 
 		IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues, producerConfig);
-
-		//
-		// Step 3: Verify the application's output data.
-		//
-		Properties consumerConfig = new Properties();
-		consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-		consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "specific-avro-integration-test-standard-consumer");
-		consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-		consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-		consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
-		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
-		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-
-		Thread.sleep(3000L);
-
-		KafkaConsumer consumer = new KafkaConsumer<>(consumerConfig);
-		consumer.subscribe(Collections.singletonList(inputTopic));
-
-		final Set<Long> allowedPartnerIds = constructPartnerIds();
-		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
-		final Map<String, List<RoamingInterval>> roamingIntervals = constructSubscriberRoamingIntervals();
-
-		final List<MessageData> list = pollMgwMessages(consumer);
-		final List<MessageCount> messageCounts = list.stream()
-				.filter(messageData -> isMessageDataOfInterest(allowedPartnerIds, messageData))
-				.map(messageData -> {
-					final LocalDate localDate = Instant.ofEpochMilli(messageData.getMessage().getReceived()).atZone(ZoneId.systemDefault()).toLocalDate();
-					final Long partnerId = messageData.getContext().getPartnerId();
-					final boolean mms = messageData.getMessage().getContentTypeIn().equals(MessageContentType.MMS);
-					final String shortCode = messageData.getContext().getBssCode();
-					final long count = messageData.getMessage().getDirection().equals(Direction.SEND) ? messageData.getContext().getOutgoingCnt() : messageData.getContext().getIncomingCnt();
-					final MessageCountType messageCountType = resolveSubscriberCountType(messageData, prepaidPostpaidRegistry, roamingIntervals);
-					return new MessageCount(localDate, partnerId, mms, shortCode, messageCountType, count);
-				})
-				.collect(Collectors.toList());
-
-		System.out.println("### messageCounts = " + messageCounts);
-
-		consumer.close();
-
-//		assertEquals(inputValues, actualValues);
 	}
 
 	private static MessageCountType resolveSubscriberCountType(MessageData messageData, Map<String, Boolean> prepaidPostpaidRegistry, Map<String, List<RoamingInterval>> roamingIntervals) {
@@ -161,13 +190,9 @@ public class LowLevelMgwMessageIntegrationTest {
 		}
 	}
 
-	private List<MessageData> pollMgwMessages(KafkaConsumer consumer) {
-		ConsumerRecords<?, MessageData> consumerRecords = consumer.poll(10000L);
-		List<MessageData> list = new ArrayList<>();
-		for (ConsumerRecord<?, MessageData> consumerRecord : consumerRecords) {
-			list.add(consumerRecord.value());
-		}
-		return list;
+	private PollResult<MessageData> pollMgwMessages(KafkaConsumer consumer) {
+		ConsumerRecords<?, MessageData> consumerRecords = consumer.poll(6000L);
+		return new PollResult<>(consumerRecords);
 	}
 
 	private List<MessageData> constructInputValues() {
@@ -196,7 +221,7 @@ public class LowLevelMgwMessageIntegrationTest {
 		return allowedPartnerIds.contains(value.getContext().getPartnerId()) && value.getContext().getBssCode() != null;
 	}
 
-	private static Set<Long> constructPartnerIds() {
+	private static Set<Long> fetchPartnerIds() {
 		final Set<Long> set = new HashSet<>();
 		set.add(111L);
 		set.add(222L);

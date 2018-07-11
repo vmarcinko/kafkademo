@@ -72,6 +72,9 @@ public class LowLevelMgwChargingIntegrationTest {
 		final KafkaConsumer consumer = constructConsumer();
 
 		final List<ChargingRequestData> allPolledChargingRequests = pollMgwMessages(consumer);
+
+		System.out.println("### allPolledChargingRequests (" + allPolledChargingRequests.size() + ") = " + allPolledChargingRequests);
+
 		final List<ChargingRequestData> relevantPolledChargingRequests = allPolledChargingRequests.stream()
 				.filter(chargingRequestData -> isRequestOfInterest(allowedPartnerIds, chargingRequestData))
 				.collect(Collectors.toList());
@@ -132,8 +135,6 @@ public class LowLevelMgwChargingIntegrationTest {
 		consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
 		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
 		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-
-		Thread.sleep(3000L);
 
 		KafkaConsumer consumer = new KafkaConsumer<>(consumerConfig);
 		consumer.subscribe(Collections.singletonList(inputTopic));
