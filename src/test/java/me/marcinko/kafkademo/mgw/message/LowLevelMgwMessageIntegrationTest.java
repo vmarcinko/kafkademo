@@ -79,22 +79,10 @@ public class LowLevelMgwMessageIntegrationTest {
 
 		boolean resetted = true;
 		while (!(pollResult = pollMgwMessages(consumer)).getValues().isEmpty()) {
+			final List<MessageData> values = pollResult.getValues();
 			System.out.println("### pollResult = " + pollResult);
-			System.out.println("### list (" + pollResult.getValues().size() + ") = " + pollResult.getValues());
-
-			final List<MessageCount> messageCounts = pollResult.getValues().stream()
-					.filter(messageData -> isMessageDataOfInterest(allowedPartnerIds, messageData))
-					.map(messageData -> {
-						final LocalDate localDate = Instant.ofEpochMilli(messageData.getMessage().getReceived()).atZone(ZoneId.systemDefault()).toLocalDate();
-						final Long partnerId = messageData.getContext().getPartnerId();
-						final boolean mms = messageData.getMessage().getContentTypeIn().equals(MessageContentType.MMS);
-						final String shortCode = messageData.getContext().getBssCode();
-						final long count = messageData.getMessage().getDirection().equals(Direction.SEND) ? messageData.getContext().getOutgoingCnt() : messageData.getContext().getIncomingCnt();
-						final MessageCountType messageCountType = resolveSubscriberCountType(messageData, prepaidPostpaidRegistry, roamingIntervals);
-						return new MessageCount(localDate, partnerId, mms, shortCode, messageCountType, count);
-					})
-					.collect(Collectors.toList());
-
+			System.out.println("### list (" + values.size() + ") = " + values);
+			final List<MessageCount> messageCounts = constructMessageCounts(values, allowedPartnerIds, prepaidPostpaidRegistry, roamingIntervals);
 			System.out.println("### messageCounts = " + messageCounts);
 
 			consumer.commitSync();
@@ -106,6 +94,21 @@ public class LowLevelMgwMessageIntegrationTest {
 		}
 
 		System.out.println("### Ending consuming task");
+	}
+
+	private List<MessageCount> constructMessageCounts(List<MessageData> values, Set<Long> allowedPartnerIds, Map<String, Boolean> prepaidPostpaidRegistry, Map<String, List<RoamingInterval>> roamingIntervals) {
+		return values.stream()
+				.filter(messageData -> isMessageDataOfInterest(allowedPartnerIds, messageData))
+				.map(messageData -> {
+					final LocalDate localDate = Instant.ofEpochMilli(messageData.getMessage().getReceived()).atZone(ZoneId.systemDefault()).toLocalDate();
+					final Long partnerId = messageData.getContext().getPartnerId();
+					final boolean mms = messageData.getMessage().getContentTypeIn().equals(MessageContentType.MMS);
+					final String shortCode = messageData.getContext().getBssCode();
+					final long count = messageData.getMessage().getDirection().equals(Direction.SEND) ? messageData.getContext().getOutgoingCnt() : messageData.getContext().getIncomingCnt();
+					final MessageCountType messageCountType = resolveSubscriberCountType(messageData, prepaidPostpaidRegistry, roamingIntervals);
+					return new MessageCount(localDate, partnerId, mms, shortCode, messageCountType, count);
+				})
+				.collect(Collectors.toList());
 	}
 
 	private void resetConsumerToFirstRecordOffsets(KafkaConsumer consumer, PollResult<MessageData> pollResult) {
@@ -227,7 +230,6 @@ public class LowLevelMgwMessageIntegrationTest {
 		set.add(222L);
 		return set;
 	}
-
 
 	private static Map<String, Boolean> constructSubscriberPrepaidPostpaidRegistry() {
 		final Map<String, Boolean> map = new HashMap<>();
