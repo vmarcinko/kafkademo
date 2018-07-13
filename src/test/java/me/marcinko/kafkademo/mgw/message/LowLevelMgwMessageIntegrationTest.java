@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
+import hr.tis.bss.subscriber.SubscriberBilling;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
@@ -48,36 +49,52 @@ public class LowLevelMgwMessageIntegrationTest {
 	@ClassRule
 	public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
 
-	private static String inputTopic = "inputTopic";
-	private static String outputTopic = "outputTopic";
+	private static String SUBSCRIBER_BILLING_TOPIC_NAME = "SUBSCRIBER_BILLING_TOPIC_NAME";
+	private static String MGW_MESSAGE_TOPIC_NAME = "MGW_MESSAGE_TOPIC_NAME";
 
 	@BeforeClass
 	public static void startKafkaCluster() throws Exception {
-		CLUSTER.createTopic(inputTopic);
-		CLUSTER.createTopic(outputTopic);
+		CLUSTER.createTopic(SUBSCRIBER_BILLING_TOPIC_NAME);
+		CLUSTER.createTopic(MGW_MESSAGE_TOPIC_NAME);
 	}
 
 	@Test
 	public void shouldRoundTripSpecificAvroDataThroughKafka() throws Exception {
 		produceInputValues();
 
-		final KafkaConsumer consumer = constructConsumer();
+		KafkaConsumer consumer = constructConsumer();
 		consumeKafkaRecords(consumer);
 		consumer.close();
 
 //		assertEquals(inputValues, actualValues);
 	}
 
+	private Map<String, Boolean> consumeSubscriberPrepaidPostpaidRegistry() throws InterruptedException {
+		Properties consumerConfig = new Properties();
+		consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+		consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "specific-avro-integration-test-standard-consumer");
+		consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+		consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+		consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+		consumerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
+		consumerConfig.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+		consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+		final List<SubscriberBilling> subscriberBillings = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfig, SUBSCRIBER_BILLING_TOPIC_NAME, 1, 7000L);
+		return subscriberBillings.stream().collect(Collectors.toMap(SubscriberBilling::getMsisdn, SubscriberBilling::getPrepaid));
+	}
+
 	private void consumeKafkaRecords(KafkaConsumer consumer) throws InterruptedException {
 		System.out.println("### Starting consuming task");
 
 		final Set<Long> allowedPartnerIds = fetchPartnerIds();
-		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
 		final Map<String, List<RoamingInterval>> roamingIntervals = constructSubscriberRoamingIntervals();
+		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
 
-		PollResult<MessageData> pollResult = null;
 
 		boolean resetted = true;
+
+		PollResult<MessageData> pollResult = null;
 		while (!(pollResult = pollMgwMessages(consumer)).getValues().isEmpty()) {
 			final List<MessageData> values = pollResult.getValues();
 			System.out.println("### pollResult = " + pollResult);
@@ -132,7 +149,7 @@ public class LowLevelMgwMessageIntegrationTest {
 		consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
 		KafkaConsumer consumer = new KafkaConsumer<>(consumerConfig);
-		consumer.subscribe(Collections.singletonList(inputTopic));
+		consumer.subscribe(Collections.singletonList(MGW_MESSAGE_TOPIC_NAME));
 
 		return consumer;
 	}
@@ -146,9 +163,11 @@ public class LowLevelMgwMessageIntegrationTest {
 		producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
 		producerConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, CLUSTER.schemaRegistryUrl());
 
-		List<MessageData> inputValues = constructInputValues();
+		List<MessageData> mgwMessages = constructInputMgwMessage();
+		IntegrationTestUtils.produceValuesSynchronously(MGW_MESSAGE_TOPIC_NAME, mgwMessages, producerConfig);
 
-		IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues, producerConfig);
+		List<SubscriberBilling> subscriberBillings = constructInputSubscriberBillings();
+		IntegrationTestUtils.produceValuesSynchronously(SUBSCRIBER_BILLING_TOPIC_NAME, subscriberBillings, producerConfig);
 	}
 
 	private static MessageCountType resolveSubscriberCountType(MessageData messageData, Map<String, Boolean> prepaidPostpaidRegistry, Map<String, List<RoamingInterval>> roamingIntervals) {
@@ -198,12 +217,23 @@ public class LowLevelMgwMessageIntegrationTest {
 		return new PollResult<>(consumerRecords);
 	}
 
-	private List<MessageData> constructInputValues() {
+	private List<MessageData> constructInputMgwMessage() {
 		List<MessageData> list = new ArrayList<>();
 		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 111L, 3, "someBssCode"));
 		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 112L, 3, "someBssCode"));
 		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 222L, 3, null));
 		list.add(constructMsgMessage("38591667", "385912392624", Direction.SEND, Instant.now(), false, 222L, 3, "someOtherBssCode"));
+		return list;
+	}
+
+	private List<SubscriberBilling> constructInputSubscriberBillings() {
+		List<SubscriberBilling> list = new ArrayList<>();
+		list.add(new SubscriberBilling("385912392624", true, Instant.now().toEpochMilli()));
+		list.add(new SubscriberBilling("385912392625", false, Instant.now().toEpochMilli()));
+		list.add(new SubscriberBilling("385912392626", false, Instant.now().toEpochMilli()));
+		list.add(new SubscriberBilling("385912392627", false, Instant.now().toEpochMilli()));
+		list.add(new SubscriberBilling("385912392628", true, Instant.now().toEpochMilli()));
+		list.add(new SubscriberBilling("385912392629", false, Instant.now().toEpochMilli()));
 		return list;
 	}
 

@@ -50,6 +50,33 @@ public class PollResult<T> {
 		return values;
 	}
 
+	public void add(PollResult<T> addition) {
+		Objects.requireNonNull(addition);
+		checkAdditionOffsets(addition);
+
+		for (Map.Entry<TopicPartition, Long> entry : addition.firstRecordOffsetByPartition.entrySet()) {
+			final TopicPartition partition = entry.getKey();
+			final Long offset = entry.getValue();
+			if (!this.firstRecordOffsetByPartition.containsKey(partition)) {
+				this.firstRecordOffsetByPartition.put(partition, offset);
+			}
+		}
+
+		this.values.addAll(addition.values);
+	}
+
+	private void checkAdditionOffsets(PollResult<T> addition) {
+		for (Map.Entry<TopicPartition, Long> entry : firstRecordOffsetByPartition.entrySet()) {
+			final TopicPartition partition = entry.getKey();
+			final Long offset = entry.getValue();
+
+			Long additionOffset = addition.getFirstRecordOffsetByPartition().get(partition);
+			if (additionOffset != null && !(offset < additionOffset)) {
+				throw new IllegalArgumentException("Offset in addition result partition " + partition + " is not larger than current offset " + offset);
+			}
+		}
+	}
+
 	@Override
 	public String toString() {
 		final StringBuilder sb = new StringBuilder("PollResult{");

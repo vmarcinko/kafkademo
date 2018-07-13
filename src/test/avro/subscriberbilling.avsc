@@ -1,0 +1,19 @@
+{
+  "namespace": "hr.tis.bss.subscriber",
+  "type": "record",
+  "name": "SubscriberBilling",
+  "fields": [
+    {
+      "name": "msisdn",
+      "type": "string"
+    },
+    {
+      "name": "prepaid",
+      "type": "boolean"
+    },
+    {
+      "name": "timestamp",
+      "type": "long"
+    }
+  ]
+}
