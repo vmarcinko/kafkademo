@@ -18,11 +18,13 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import me.marcinko.kafkademo.ConsumingUtils;
+import me.marcinko.kafkademo.InMemorySubscriberRegistryImpl;
+import me.marcinko.kafkademo.PollResult;
+import me.marcinko.kafkademo.SubscriberRegistry;
 import me.marcinko.kafkademo.utils.EmbeddedSingleNodeKafkaCluster;
 import me.marcinko.kafkademo.utils.IntegrationTestUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -47,12 +49,10 @@ public class LowLevelMgwChargingIntegrationTest {
 	public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
 
 	private static String inputTopic = "inputTopic";
-	private static String outputTopic = "outputTopic";
 
 	@BeforeClass
 	public static void startKafkaCluster() throws Exception {
 		CLUSTER.createTopic(inputTopic);
-		CLUSTER.createTopic(outputTopic);
 	}
 
 	@Test
@@ -60,29 +60,54 @@ public class LowLevelMgwChargingIntegrationTest {
 		produceTopicValues();
 
 		final ReservedChargingTransactionStore reservedChargingTransactionStore = new InMemoryReservedChargingTransactionStoreImpl();
+		final SubscriberRegistry subscriberRegistry = new InMemorySubscriberRegistryImpl(constructSubscriberPrepaidPostpaidRegistry(), Collections.EMPTY_MAP);
 
-		final Set<Long> allowedPartnerIds = constructPartnerIds();
-		final Map<String, Boolean> prepaidPostpaidRegistry = constructSubscriberPrepaidPostpaidRegistry();
-
-		consumeTopicValues(reservedChargingTransactionStore, allowedPartnerIds, prepaidPostpaidRegistry);
-		consumeTopicValues(reservedChargingTransactionStore, allowedPartnerIds, prepaidPostpaidRegistry);
+		final KafkaConsumer consumer = constructConsumer();
+		consumeKafkaRecords(consumer, subscriberRegistry, reservedChargingTransactionStore);
+		consumer.close();
 	}
 
-	private void consumeTopicValues(ReservedChargingTransactionStore reservedChargingTransactionStore, Set<Long> allowedPartnerIds, Map<String, Boolean> prepaidPostpaidRegistry) throws InterruptedException {
-		final KafkaConsumer consumer = constructConsumer();
+	private void consumeKafkaRecords(KafkaConsumer consumer, SubscriberRegistry subscriberRegistry, ReservedChargingTransactionStore reservedChargingTransactionStore) throws InterruptedException {
+		System.out.println("### Starting consuming task");
 
-		final List<ChargingRequestData> allPolledChargingRequests = pollMgwMessages(consumer);
+		final Set<Long> allowedPartnerIds = fetchPartnerIds();
 
-		System.out.println("### allPolledChargingRequests (" + allPolledChargingRequests.size() + ") = " + allPolledChargingRequests);
+		boolean resetted = true;
 
-		final List<ChargingRequestData> relevantPolledChargingRequests = allPolledChargingRequests.stream()
+		PollResult<ChargingRequestData> pollResult = null;
+		while (!(pollResult = ConsumingUtils.pollKafkaRecords(consumer)).getValues().isEmpty()) {
+			final List<ChargingRequestData> values = pollResult.getValues();
+			System.out.println("### pollResult = " + pollResult);
+			System.out.println("### list (" + values.size() + ") = " + values);
+			consumeTopicValues(values, allowedPartnerIds, subscriberRegistry, reservedChargingTransactionStore);
+
+			consumer.commitSync();
+
+			if (!resetted) {
+				ConsumingUtils.resetConsumerToFirstRecordOffsets(consumer, pollResult);
+				resetted = true;
+			}
+		}
+
+		System.out.println("### Ending consuming task");
+	}
+
+
+	private void consumeTopicValues(List<ChargingRequestData> values, Set<Long> allowedPartnerIds, SubscriberRegistry subscriberRegistry, ReservedChargingTransactionStore reservedChargingTransactionStore) throws InterruptedException {
+		final List<ChargingRequestData> relevantPolledChargingRequests = values.stream()
 				.filter(chargingRequestData -> isRequestOfInterest(allowedPartnerIds, chargingRequestData))
 				.collect(Collectors.toList());
+
+		final Set<String> msisdns = relevantPolledChargingRequests.stream()
+				.filter(chargingRequestData -> chargingRequestData.getRequest().getEndUserAddress() != null)
+				.map(chargingRequestData -> chargingRequestData.getRequest().getEndUserAddress())
+				.collect(Collectors.toSet());
+		final Map<String, Boolean> prepaidRegistry = subscriberRegistry.resolvePrepaidRegistry(msisdns);
 
 		// all reserved transactions in this poll
 		final Set<ChargingTransaction> polledReservedTransactions = relevantPolledChargingRequests.stream()
 				.filter(requestData -> requestData.getRequest().getType().equals(ChargingRequestType.RESERVE))
-				.map(requestData -> constructTransaction(prepaidPostpaidRegistry, requestData))
+				.map(requestData -> constructTransaction(prepaidRegistry, requestData))
 				.collect(Collectors.toSet());
 
 		// IDs of all charged transactions in this poll
@@ -108,11 +133,6 @@ public class LowLevelMgwChargingIntegrationTest {
 		final Set<ChargingTransaction> storedChargedTransactions = findAndDeleteStoredReservedTransactionByIds(reservedChargingTransactionStore, storedChargedTransactionIds);
 
 		final Set<ChargingTransaction> chargedTransactions = union(nonStoredChargedTransactions, storedChargedTransactions);
-
-		System.out.println("### chargedTransactions = " + chargedTransactions);
-
-//		consumer.commitSync();
-		consumer.close();
 	}
 
 	private Set<ChargingTransaction> findAndDeleteStoredReservedTransactionByIds(ReservedChargingTransactionStore reservedChargingTransactionStore, Set<String> storedChargedTransactionIds) {
@@ -214,15 +234,6 @@ public class LowLevelMgwChargingIntegrationTest {
 		}
 	}
 
-	private List<ChargingRequestData> pollMgwMessages(KafkaConsumer consumer) {
-		ConsumerRecords<?, ChargingRequestData> consumerRecords = consumer.poll(10000L);
-		List<ChargingRequestData> list = new ArrayList<>();
-		for (ConsumerRecord<?, ChargingRequestData> consumerRecord : consumerRecords) {
-			list.add(consumerRecord.value());
-		}
-		return list;
-	}
-
 	private ChargingRequestData constructReserveRequest(String reservationId, Long partnerId, boolean success, String endUserAddress, Double amount, String billingText, Instant receivedInstant) {
 		long time = receivedInstant.toEpochMilli();
 		final ChargingRequest request = new ChargingRequest(UUID.randomUUID().toString(), reservationId, time, ChargingRequestType.RESERVE, endUserAddress, amount, billingText, null, true, 321L, ChargingParty.END_USER, Direction.SEND, null, null, null, null, null, "SOmeBssCode", null, null, null, null, null, null, null);
@@ -230,7 +241,7 @@ public class LowLevelMgwChargingIntegrationTest {
 		return new ChargingRequestData(request, context);
 	}
 
-	private static Set<Long> constructPartnerIds() {
+	private static Set<Long> fetchPartnerIds() {
 		final Set<Long> set = new HashSet<>();
 		set.add(111L);
 		set.add(222L);

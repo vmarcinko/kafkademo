@@ -21,16 +21,16 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import me.marcinko.kafkademo.ConsumingUtils;
 import me.marcinko.kafkademo.InMemorySubscriberRegistryImpl;
+import me.marcinko.kafkademo.PollResult;
 import me.marcinko.kafkademo.SubscriberRegistry;
 import me.marcinko.kafkademo.utils.EmbeddedSingleNodeKafkaCluster;
 import me.marcinko.kafkademo.utils.IntegrationTestUtils;
-import me.marcinko.kafkademo.utils.PollResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.BeforeClass;
@@ -78,7 +78,7 @@ public class LowLevelMgwMessageIntegrationTest {
 		boolean resetted = true;
 
 		PollResult<MessageData> pollResult = null;
-		while (!(pollResult = pollMgwMessages(consumer)).getValues().isEmpty()) {
+		while (!(pollResult = ConsumingUtils.pollKafkaRecords(consumer)).getValues().isEmpty()) {
 			final List<MessageData> values = pollResult.getValues();
 			System.out.println("### pollResult = " + pollResult);
 			System.out.println("### list (" + values.size() + ") = " + values);
@@ -88,7 +88,7 @@ public class LowLevelMgwMessageIntegrationTest {
 			consumer.commitSync();
 
 			if (!resetted) {
-				resetConsumerToFirstRecordOffsets(consumer, pollResult);
+				ConsumingUtils.resetConsumerToFirstRecordOffsets(consumer, pollResult);
 				resetted = true;
 			}
 		}
@@ -121,14 +121,6 @@ public class LowLevelMgwMessageIntegrationTest {
 
 	private String resolveSubscriberMsisdnMsisdn(MessageData messageData) {
 		return messageData.getMessage().getDirection().equals(Direction.SEND) ? messageData.getMessage().getDest() : messageData.getMessage().getSrc();
-	}
-
-	private void resetConsumerToFirstRecordOffsets(KafkaConsumer consumer, PollResult<MessageData> pollResult) {
-		for (Map.Entry<TopicPartition, Long> entry : pollResult.getFirstRecordOffsetByPartition().entrySet()) {
-			final TopicPartition partition = entry.getKey();
-			long offset = entry.getValue();
-			consumer.seek(partition, offset);
-		}
 	}
 
 	private KafkaConsumer constructConsumer() throws InterruptedException {
@@ -202,11 +194,6 @@ public class LowLevelMgwMessageIntegrationTest {
 			final Optional<RoamingInterval> matchedInterval = subscriberRoamingIntervals.stream().filter(roamingInterval -> receivedInstant.isBefore(roamingInterval.getTimeTo()) && !receivedInstant.isBefore(roamingInterval.getTimeTo())).findFirst();
 			return matchedInterval.map(RoamingInterval::isInRoaming).orElse(false);
 		}
-	}
-
-	private PollResult<MessageData> pollMgwMessages(KafkaConsumer consumer) {
-		ConsumerRecords<?, MessageData> consumerRecords = consumer.poll(6000L);
-		return new PollResult<>(consumerRecords);
 	}
 
 	private List<MessageData> constructInputMgwMessage() {

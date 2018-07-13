@@ -1,4 +1,4 @@
-package me.marcinko.kafkademo.utils;
+package me.marcinko.kafkademo;
 
 import java.util.ArrayList;
 import java.util.HashMap;
