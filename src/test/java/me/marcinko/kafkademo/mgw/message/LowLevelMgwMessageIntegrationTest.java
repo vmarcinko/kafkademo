@@ -3,6 +3,7 @@ package me.marcinko.kafkademo.mgw.message;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,11 +25,11 @@ import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import me.marcinko.kafkademo.ConsumingUtils;
 import me.marcinko.kafkademo.InMemorySubscriberRegistryImpl;
 import me.marcinko.kafkademo.PollResult;
+import me.marcinko.kafkademo.RoamingInterval;
 import me.marcinko.kafkademo.SubscriberRegistry;
 import me.marcinko.kafkademo.utils.EmbeddedSingleNodeKafkaCluster;
 import me.marcinko.kafkademo.utils.IntegrationTestUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -191,7 +192,8 @@ public class LowLevelMgwMessageIntegrationTest {
 			return false;
 		}
 		else {
-			final Optional<RoamingInterval> matchedInterval = subscriberRoamingIntervals.stream().filter(roamingInterval -> receivedInstant.isBefore(roamingInterval.getTimeTo()) && !receivedInstant.isBefore(roamingInterval.getTimeTo())).findFirst();
+			final LocalDateTime timestamp = receivedInstant.atZone(ZoneId.systemDefault()).toLocalDateTime();
+			final Optional<RoamingInterval> matchedInterval = subscriberRoamingIntervals.stream().filter(roamingInterval -> roamingInterval.isWithin(timestamp)).findFirst();
 			return matchedInterval.map(RoamingInterval::isInRoaming).orElse(false);
 		}
 	}
@@ -242,9 +244,9 @@ public class LowLevelMgwMessageIntegrationTest {
 
 	private static Map<String, List<RoamingInterval>> constructSubscriberRoamingIntervals() {
 		final Map<String, List<RoamingInterval>> map = new HashMap<>();
-		final Instant now = Instant.now();
-		map.put("385912392625", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(100), now.minusSeconds(80)), new RoamingInterval(false, now.minusSeconds(80), now.minusSeconds(30)), new RoamingInterval(true, now.minusSeconds(30), Instant.MAX)));
-		map.put("385912392626", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(50), Instant.MAX)));
+		final LocalDateTime now = LocalDateTime.now();
+		map.put("385912392625", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(100), now.minusSeconds(80)), new RoamingInterval(false, now.minusSeconds(80), now.minusSeconds(30)), new RoamingInterval(true, now.minusSeconds(30), LocalDateTime.MAX)));
+		map.put("385912392626", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(50), LocalDateTime.MAX)));
 		return map;
 	}
 }

@@ -2,6 +2,7 @@ package me.marcinko.kafkademo.mgw.message;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
+import me.marcinko.kafkademo.RoamingInterval;
 import me.marcinko.kafkademo.utils.EmbeddedSingleNodeKafkaCluster;
 import me.marcinko.kafkademo.utils.IntegrationTestUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -205,9 +207,9 @@ public class StreamsMgwMessageIntegrationTest {
 
 	private static Map<String, List<RoamingInterval>> constructSubscriberRoamingIntervals() {
 		final Map<String, List<RoamingInterval>> map = new HashMap<>();
-		final Instant now = Instant.now();
-		map.put("385912392625", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(100), now.minusSeconds(80)), new RoamingInterval(false, now.minusSeconds(80), now.minusSeconds(30)), new RoamingInterval(true, now.minusSeconds(30), Instant.MAX)));
-		map.put("385912392626", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(50), Instant.MAX)));
+		final LocalDateTime now = LocalDateTime.now();
+		map.put("385912392625", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(100), now.minusSeconds(80)), new RoamingInterval(false, now.minusSeconds(80), now.minusSeconds(30)), new RoamingInterval(true, now.minusSeconds(30), LocalDateTime.MAX)));
+		map.put("385912392626", Lists.newArrayList(new RoamingInterval(true, now.minusSeconds(50), LocalDateTime.MAX)));
 		return map;
 	}
 }

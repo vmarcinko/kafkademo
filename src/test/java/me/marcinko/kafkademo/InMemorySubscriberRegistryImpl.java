@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import me.marcinko.kafkademo.mgw.message.RoamingInterval;
-
 public class InMemorySubscriberRegistryImpl implements SubscriberRegistry {
 	private final Map<String, Boolean> prepaidRegistry;
 	private final Map<String, List<RoamingInterval>> roamingRegistry;
